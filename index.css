@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-nutty-bg: #F7F7F2;
+  --color-nutty-card: #FFFFFF;
+  --color-nutty-primary: #4A4A32;
+  --color-nutty-secondary: #7C7C60;
+  --color-nutty-accent: #A3A380;
+  --color-nutty-warning-bg: #FFF9F0;
+  --color-nutty-warning-border: #E5BE8F;
+  --color-nutty-text-main: #2D2D2A;
+  --color-nutty-text-muted: #6B6B61;
+  --color-nutty-border: #E8E8E1;
+  --color-nutty-safe: #5D7A5D;
+
+  --font-sans: "Helvetica Neue", Arial, sans-serif;
+}
