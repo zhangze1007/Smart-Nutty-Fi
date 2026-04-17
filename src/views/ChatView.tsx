@@ -1,195 +1,203 @@
-import { useState, useRef, useEffect } from "react";
-import { Send, Sparkles, ArrowLeft, ShieldAlert, CheckCircle2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Send, Sparkles, ShieldAlert, CheckCircle2 } from "lucide-react";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { AssistantResponse, RiskPrompt, TransferResolutionEvent } from "@/lib/types";
 
 type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   action?: {
-    type: "transfer_confirm" | "bill_pay" | "insight";
-    data: any;
+    type: "transfer";
+    data: {
+      recipient: string;
+      amount: number;
+      status: "requires_confirmation" | "completed";
+      reasons: string[];
+    };
   };
 };
 
-export default function ChatView({ onRiskTrigger }: { onRiskTrigger: (amount: number, recipient: string, reason: string) => void }) {
+function createAssistantMessage(response: AssistantResponse): Message {
+  return {
+    id: Date.now().toString(),
+    role: "assistant",
+    content: response.reply,
+    action:
+      response.intent === "transfer_money" && response.actionCard
+        ? {
+            type: "transfer",
+            data: {
+              recipient: response.actionCard.recipient,
+              amount: response.actionCard.amount,
+              status: response.status === "requires_confirmation" ? "requires_confirmation" : "completed",
+              reasons: response.calmMode?.reasons ?? [],
+            },
+          }
+        : undefined,
+  };
+}
+
+export default function ChatView({
+  onRiskTrigger,
+  transferEvent,
+}: {
+  onRiskTrigger: (riskPrompt: RiskPrompt) => void;
+  transferEvent: TransferResolutionEvent | null;
+}) {
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
       role: "assistant",
       content: "Hi Alex! I'm Nutty. How can I help you with your money today?",
-    }
+    },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  useEffect(() => {
+    if (!transferEvent) {
+      return;
+    }
 
-    const userMsg: Message = {
+    setMessages((previousMessages) => [
+      ...previousMessages,
+      createAssistantMessage(transferEvent.response),
+    ]);
+  }, [transferEvent]);
+
+  const handleAssistantResponse = (response: AssistantResponse) => {
+    setMessages((previousMessages) => [...previousMessages, createAssistantMessage(response)]);
+
+    if (response.status === "requires_confirmation" && response.calmMode && response.confirmation) {
+      onRiskTrigger({
+        amount: response.confirmation.amount,
+        recipient: response.confirmation.recipient,
+        reasons: response.calmMode.reasons,
+      });
+    }
+  };
+
+  const handleSend = async () => {
+    if (!input.trim() || isSending) {
+      return;
+    }
+
+    const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
-      content: input,
+      content: input.trim(),
     };
 
-    setMessages(prev => [...prev, userMsg]);
+    setMessages((previousMessages) => [...previousMessages, userMessage]);
     setInput("");
+    setIsSending(true);
 
-    // Simulate AI response based on keywords
-    setTimeout(() => {
-      const lowerInput = userMsg.content.toLowerCase();
-      let aiMsg: Message;
+    try {
+      const assistantResponse = await fetch("/api/assistant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+        }),
+      });
 
-      if (lowerInput.includes("unifi") || lowerInput.includes("bill")) {
-        aiMsg = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "I found your upcoming Unifi bill. Would you like to pay it now?",
-          action: {
-            type: "bill_pay",
-            data: { biller: "Unifi", amount: 159.00, dueDate: "Oct 15" }
-          }
-        };
-      } else if (lowerInput.includes("transfer") && lowerInput.includes("crypto")) {
-        // Trigger risk intervention directly or show a message that triggers it
-        aiMsg = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "I'm setting up the transfer to the Crypto Exchange.",
-          action: {
-            type: "transfer_confirm",
-            data: { recipient: "Unknown Crypto Exchange", amount: 5000, isRisky: true }
-          }
-        };
-      } else if (lowerInput.includes("transfer") && lowerInput.includes("ali")) {
-        aiMsg = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "Ready to transfer to Ali. Please confirm the details.",
-          action: {
-            type: "transfer_confirm",
-            data: { recipient: "Ali bin Abu", amount: 50, isRisky: false }
-          }
-        };
-      } else if (lowerInput.includes("spend") || lowerInput.includes("week")) {
-        aiMsg = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "Here's a quick look at your spending this week. You're doing well, mostly spent on Food & Dining.",
-          action: {
-            type: "insight",
-            data: { total: 420.50, topCategory: "Food & Dining" }
-          }
-        };
-      } else {
-        aiMsg = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "I can help you transfer money, pay bills, or check your spending. What would you like to do?",
-        };
-      }
-
-      setMessages(prev => [...prev, aiMsg]);
-    }, 1000);
+      const payload = (await assistantResponse.json()) as AssistantResponse;
+      handleAssistantResponse(payload);
+    } catch {
+      handleAssistantResponse({
+        reply: "Nutty hit a network problem. Please try again in a moment.",
+        intent: "unknown",
+        status: "error",
+        actionCard: null,
+        calmMode: null,
+        confirmation: null,
+      });
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
-    <div className="flex flex-col h-full bg-[#FAF9F6]">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-nutty-border flex items-center gap-3 bg-nutty-card/80 backdrop-blur-md sticky top-0 z-10">
-        <div className="w-10 h-10 bg-nutty-accent text-white rounded-full flex items-center justify-center">
-          <Sparkles className="w-5 h-5" />
+    <div className="flex h-full flex-col bg-[#FAF9F6]">
+      <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-nutty-border bg-nutty-card/80 px-6 py-4 backdrop-blur-md">
+        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-nutty-accent text-white">
+          <Sparkles className="h-5 w-5" />
         </div>
         <div>
           <h2 className="text-base font-bold text-nutty-text-main">Nutty</h2>
-          <p className="text-xs text-nutty-safe font-medium">Online</p>
+          <p className="text-xs font-medium text-nutty-safe">
+            {isSending ? "Checking..." : "Online"}
+          </p>
         </div>
       </div>
 
-      {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-        {messages.map((msg) => (
-          <div 
-            key={msg.id} 
-            className={cn(
-              "flex w-full",
-              msg.role === "user" ? "justify-end" : "justify-start"
-            )}
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
+        {messages.map((message) => (
+          <div
+            key={message.id}
+            className={cn("flex w-full", message.role === "user" ? "justify-end" : "justify-start")}
           >
-            <div className={cn(
-              "max-w-[85%] flex flex-col gap-2",
-              msg.role === "user" ? "items-end" : "items-start"
-            )}>
-              {/* Message Bubble */}
-              <div className={cn(
-                "px-4 py-3 rounded-2xl text-sm",
-                msg.role === "user" 
-                  ? "bg-nutty-primary text-white rounded-tr-sm" 
-                  : "bg-nutty-card text-nutty-text-main border border-nutty-border rounded-tl-sm"
-              )}>
-                {msg.content}
+            <div
+              className={cn(
+                "flex max-w-[85%] flex-col gap-2",
+                message.role === "user" ? "items-end" : "items-start",
+              )}
+            >
+              <div
+                className={cn(
+                  "rounded-2xl px-4 py-3 text-sm",
+                  message.role === "user"
+                    ? "rounded-tr-sm bg-nutty-primary text-white"
+                    : "rounded-tl-sm border border-nutty-border bg-nutty-card text-nutty-text-main",
+                )}
+              >
+                {message.content}
               </div>
 
-              {/* Action Cards */}
-              {msg.action && (
-                <div className="w-full mt-1 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {msg.action.type === "bill_pay" && (
-                    <div className="bg-nutty-card border border-nutty-border rounded-2xl p-4 shadow-sm w-full max-w-[280px]">
-                      <div className="flex justify-between items-start mb-3">
-                        <div className="w-10 h-10 bg-nutty-bg text-nutty-primary rounded-xl flex items-center justify-center font-bold">
-                          U
-                        </div>
-                        <span className="text-xs font-medium text-[#8B4513] bg-nutty-warning-bg px-2 py-1 rounded-md">Due {msg.action.data.dueDate}</span>
-                      </div>
-                      <p className="text-sm font-medium text-nutty-text-main">{msg.action.data.biller}</p>
-                      <p className="text-2xl font-bold text-nutty-text-main mb-4">RM {msg.action.data.amount.toFixed(2)}</p>
-                      <Button className="w-full rounded-xl h-10">Pay Now</Button>
-                    </div>
-                  )}
+              {message.action?.type === "transfer" && (
+                <div className="mt-1 w-full animate-in slide-in-from-bottom-2 fade-in duration-300">
+                  <div className="w-full max-w-[280px] rounded-2xl border border-nutty-border bg-nutty-card p-4 shadow-sm">
+                    <p className="mb-1 text-xs text-nutty-text-muted">Transfer to</p>
+                    <p className="mb-2 text-sm font-medium text-nutty-text-main">
+                      {message.action.data.recipient}
+                    </p>
+                    <p className="mb-4 text-2xl font-bold text-nutty-text-main">
+                      RM {message.action.data.amount.toFixed(2)}
+                    </p>
 
-                  {msg.action.type === "transfer_confirm" && (
-                    <div className="bg-nutty-card border border-nutty-border rounded-2xl p-4 shadow-sm w-full max-w-[280px]">
-                      <p className="text-xs text-nutty-text-muted mb-1">Transfer to</p>
-                      <p className="text-sm font-medium text-nutty-text-main mb-2">{msg.action.data.recipient}</p>
-                      <p className="text-2xl font-bold text-nutty-text-main mb-4">RM {msg.action.data.amount.toFixed(2)}</p>
-                      
-                      {msg.action.data.isRisky ? (
-                        <Button 
-                          variant="destructive" 
-                          className="w-full rounded-xl h-10 flex gap-2"
-                          onClick={() => onRiskTrigger(msg.action!.data.amount, msg.action!.data.recipient, "This recipient was recently flagged for suspicious activity. Are you sure you want to proceed?")}
-                        >
-                          <ShieldAlert className="w-4 h-4" />
-                          Review Transfer
-                        </Button>
-                      ) : (
-                        <Button className="w-full rounded-xl h-10 flex gap-2">
-                          <CheckCircle2 className="w-4 h-4" />
-                          Confirm Transfer
-                        </Button>
-                      )}
-                    </div>
-                  )}
-
-                  {msg.action.type === "insight" && (
-                    <div className="bg-nutty-bg border border-nutty-border rounded-2xl p-4 shadow-sm w-full max-w-[280px]">
-                      <p className="text-xs text-nutty-primary font-medium mb-1">This Week</p>
-                      <p className="text-2xl font-bold text-nutty-text-main mb-2">RM {msg.action.data.total.toFixed(2)}</p>
-                      <div className="bg-white/60 rounded-lg p-2 text-xs text-nutty-text-main">
-                        Top category: <span className="font-semibold">{msg.action.data.topCategory}</span>
-                      </div>
-                    </div>
-                  )}
+                    {message.action.data.status === "requires_confirmation" ? (
+                      <Button
+                        variant="destructive"
+                        className="flex h-10 w-full gap-2 rounded-xl"
+                        onClick={() =>
+                          onRiskTrigger({
+                            amount: message.action!.data.amount,
+                            recipient: message.action!.data.recipient,
+                            reasons: message.action!.data.reasons,
+                          })
+                        }
+                      >
+                        <ShieldAlert className="h-4 w-4" />
+                        Review Calm Mode
+                      </Button>
+                    ) : (
+                      <Button className="flex h-10 w-full gap-2 rounded-xl" disabled>
+                        <CheckCircle2 className="h-4 w-4" />
+                        Transfer Completed
+                      </Button>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -198,29 +206,31 @@ export default function ChatView({ onRiskTrigger }: { onRiskTrigger: (amount: nu
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
-      <div className="p-4 bg-nutty-card border-t border-nutty-border">
-        <div className="flex gap-2 items-center bg-nutty-bg rounded-full p-1 pr-2 border border-nutty-border focus-within:border-nutty-accent focus-within:ring-2 focus-within:ring-nutty-bg transition-all">
-          <Input 
+      <div className="border-t border-nutty-border bg-nutty-card p-4">
+        <div className="flex items-center gap-2 rounded-full border border-nutty-border bg-nutty-bg p-1 pr-2 transition-all focus-within:border-nutty-accent focus-within:ring-2 focus-within:ring-nutty-bg">
+          <Input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            onChange={(event) => setInput(event.target.value)}
+            onKeyDown={(event) => event.key === "Enter" && handleSend()}
             placeholder="Type your request..."
-            className="border-0 bg-transparent shadow-none focus-visible:ring-0 h-12 px-4"
+            className="h-12 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0"
           />
-          <Button 
-            size="icon" 
-            className="rounded-full h-10 w-10 shrink-0"
+          <Button
+            size="icon"
+            className="h-10 w-10 shrink-0 rounded-full"
             onClick={handleSend}
-            disabled={!input.trim()}
+            disabled={!input.trim() || isSending}
           >
-            <Send className="w-4 h-4 ml-0.5" />
+            <Send className="ml-0.5 h-4 w-4" />
           </Button>
         </div>
-        <div className="flex gap-2 mt-3 overflow-x-auto pb-1 scrollbar-hide px-1">
-          <SuggestionBadge text="Pay Unifi bill" onClick={() => setInput("Pay Unifi bill")} />
+        <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
+          <SuggestionBadge text="Pay Unifi bill" onClick={() => setInput("Pay my Unifi bill")} />
           <SuggestionBadge text="Transfer RM50 to Ali" onClick={() => setInput("Transfer RM50 to Ali")} />
-          <SuggestionBadge text="Transfer to Crypto" onClick={() => setInput("Transfer RM5000 to Crypto Exchange")} />
+          <SuggestionBadge
+            text="Transfer to Crypto"
+            onClick={() => setInput("Transfer RM5000 to Crypto Exchange")}
+          />
         </div>
       </div>
     </div>
@@ -229,9 +239,9 @@ export default function ChatView({ onRiskTrigger }: { onRiskTrigger: (amount: nu
 
 function SuggestionBadge({ text, onClick }: { text: string; onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className="whitespace-nowrap px-3 py-1.5 bg-nutty-card border border-nutty-border hover:bg-nutty-bg text-nutty-text-muted text-xs font-medium rounded-full transition-colors"
+      className="whitespace-nowrap rounded-full border border-nutty-border bg-nutty-card px-3 py-1.5 text-xs font-medium text-nutty-text-muted transition-colors hover:bg-nutty-bg"
     >
       {text}
     </button>

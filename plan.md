@@ -1,172 +1,115 @@
-# Nutty-Fi plan.md
+# Nutty-Fi Calm Mode MVP Plan
 
-## Goal
-Ship a submission-compliant Nutty-Fi MVP that:
-- uses Google AI Studio-generated frontend
-- adds a minimal Genkit backend
-- deploys publicly on Google Cloud Run
-- provides a public GitHub repository
-- supports a 3-minute demo showing chat-to-action
+## Summary
 
-## Current status
-### Already done
-- Problem/solution direction is defined around Calm Mode and fintech risk intervention.
-- Frontend prototype exists in Vite + React.
-- Firebase project and Firestore were initialized.
-- GitHub repository has been created and project files uploaded.
-- Google AI Studio has already been used, which aligns with the Google AI ecosystem requirement.
+- Keep the Vite + React frontend. Do not migrate to Next.js.
+- Use one Express service for both API routes and the built SPA.
+- Target Cloud Run with a supported Node LTS runtime.
+- Compile backend TypeScript to JavaScript before production startup.
+- Make risk enforcement deterministic and server-side.
+- Include a mocked `search_policy_guidelines` tool so the codebase contains the required grounded RAG architecture for hackathon judging.
 
-### Gaps to close
-1. Deployment target is still not Cloud Run.
-2. No confirmed Genkit backend is in place yet.
-3. The current stack is frontend-heavy and not yet a true “chat-to-action” agent flow.
-4. README, setup instructions, and submission-oriented docs still need tightening.
-5. Vertex AI Search / RAG is optional for MVP viability but useful if time remains.
+## Mandatory Constraints Applied
 
-## Architecture decision
-Keep the current Vite frontend.
-Do **not** migrate to Next.js now.
+### Runtime
 
-### Why
-- Vite is enough for the UI, simulator, and Calm Mode flows.
-- Rewriting to Next.js costs time without helping the core judging criteria much.
-- Cloud Run can deploy Node.js services directly from source, including apps built from source or a Dockerfile.
-- Genkit is designed for full-stack AI apps and tool-calling workflows, which is the missing piece, not a frontend rewrite.
+- `package.json` uses Node `22.x`
+- production start uses compiled JavaScript, not `tsx`
 
-## Target architecture
-### Frontend
-- Vite + React
-- Existing UI from AI Studio
-- Calls backend endpoints for action orchestration
-- Reads/writes selected state to Firestore
+### Build Strategy
 
-### Backend
-- Node.js server
-- Genkit with Gemini model
-- Tool-calling flow for:
+- frontend builds with Vite into `dist/client`
+- backend compiles with `tsc` into `dist/server/server`
+- production entrypoint is `node dist/server/server/index.js`
+
+### Security Core
+
+- Gemini parses intent and generates explanations
+- hardcoded backend rules decide whether a transfer is risky
+- `risk_check` remains deterministic and server-side
+
+### RAG Placeholder
+
+- `search_policy_guidelines` is implemented as a Genkit tool
+- risky Calm Mode flows trigger policy retrieval through this tool
+- current implementation returns mocked policy guidance
+- this keeps the architecture ready for future Vertex AI Search integration
+
+## First End-to-End Flow
+
+Implemented path:
+
+`chat request` -> `intent parse` -> `deterministic risk check` -> `search_policy_guidelines` -> `Calm Mode UI` -> `confirm-transfer endpoint` -> `transaction write` -> `success response`
+
+Exact risky example:
+
+- `Transfer RM5000 to Crypto Exchange`
+
+Exact safe example:
+
+- `Transfer RM50 to Ali`
+
+## Data Architecture
+
+Frontend read path:
+
+- `src/data/mockTransactions.ts`
+- `src/lib/firebase.ts`
+- `src/lib/dataProvider.ts`
+- Firestore available -> use Firestore
+- otherwise -> use mock data
+
+Backend write path:
+
+- Firebase Admin + Firestore when available
+- otherwise -> use in-memory fallback
+
+Collections used:
+
+- `transactions`
+- `riskEvents`
+- `simulations`
+- `appState/demo`
+
+## Backend Design
+
+- Genkit model: `gemini-2.5-flash`
+- tools:
+  - `risk_check`
+  - `search_policy_guidelines`
   - `transfer_money`
   - `pay_bill`
   - `calculate_cashflow`
-  - `risk_check`
-- Optional Firestore persistence for:
-  - transactions
-  - risk events
-  - simulation history
+- routes:
+  - `GET /api/health`
+  - `POST /api/assistant`
+  - `POST /api/actions/confirm-transfer`
 
-### Data
-- Firestore collections:
-  - `users`
-  - `transactions`
-  - `riskEvents`
-  - `simulations`
+Deterministic transfer risk rules:
 
-### Deployment
-- Public GitHub repo
-- Cloud Run public URL
-- Environment variables managed securely
-- Firebase remains supportive infrastructure, not the final hosting target
+- amount `>= 1000`
+- payee contains `crypto` or `exchange`
+- payee is not in the known payee list
+- projected remaining balance after upcoming bills and the transfer is `< 500`
 
-## Minimum submission scope
-### Must have
-1. Public GitHub repository
-2. Public Cloud Run deployment link
-3. Working prototype accessible by web
-4. 3-minute demo video
-5. English README with setup instructions
+## Frontend Changes
 
-### MVP product flows
-1. **Natural-language money action**
-   - User types: “Transfer RM50 to Ali”
-   - Backend parses intent and prepares action
-2. **Calm Mode**
-   - Risk conditions trigger intervention
-   - User sees clear warning + pause/continue options
-3. **What-if simulator**
-   - User asks about a planned purchase
-   - Backend calculates short-term cashflow effect
+- fixed `src/component` vs `src/components` mismatch
+- removed client-side Gemini key exposure from Vite config
+- replaced mocked chat keyword logic with `/api/assistant`
+- kept Calm Mode modal in `App.tsx`
+- moved dashboard and transactions reads onto `dataProvider`
 
-## Execution plan
-### Phase 1 — Stabilize repo
-- Verify repository contains:
-  - frontend source
-  - package files
-  - environment example
-- Add a serious README:
-  - project overview
-  - stack
-  - setup
-  - local run
-  - deploy notes
-  - hackathon context
+## Verification Targets
 
-### Phase 2 — Add Genkit backend
-- Create backend folder or service entrypoint
-- Install Genkit and Gemini plugin
-- Define minimal tools:
-  - `transfer_money`
-  - `pay_bill`
-  - `calculate_cashflow`
-  - `risk_check`
-- Build one main flow:
-  - input -> tool selection -> action result -> Calm Mode if necessary
+- `npm run lint`
+- `npm run build`
+- compiled server starts successfully
+- risky transfer returns Calm Mode payload
+- confirm-transfer completes the risky transfer
+- safe transfer completes without Calm Mode
+- SPA is served by the Express server
 
-### Phase 3 — Connect frontend to backend
-- Replace mock action responses with backend API calls
-- Keep UI mostly unchanged
-- Ensure one full happy path works end-to-end
+## Next Upgrade Path
 
-### Phase 4 — Firestore integration
-- Store mock transaction records
-- Store risk events
-- Store simulation outputs
-- Avoid overengineering schema
-
-### Phase 5 — Deploy to Cloud Run
-- Deploy backend + served frontend or a unified app
-- Ensure public unauthenticated access
-- Test on mobile browser
-
-### Phase 6 — Submission materials
-- README cleanup
-- 3-minute demo recording
-- Slide deck
-- Cloud Run URL check
-- Final GitHub verification
-
-## Priority order
-### Highest priority
-1. Genkit backend
-2. Cloud Run deployment
-3. One complete demo flow
-4. README
-
-### Medium priority
-5. Firestore persistence
-6. Better UX polish
-7. Spending history visuals
-
-### Only if time remains
-8. Vertex AI Search / RAG over policy docs
-9. Auth
-10. Android packaging
-
-## What to avoid now
-- Rewriting Vite to Next.js
-- Building a native Android app first
-- Complex banking integrations
-- Multi-agent orchestration
-- Large RAG pipeline before core flows work
-- Excessive Firebase console setup
-
-## Deliverable checklist
-- [ ] GitHub repo is public
-- [ ] README is in English
-- [ ] Setup instructions are complete
-- [ ] Genkit backend works locally
-- [ ] Frontend calls backend successfully
-- [ ] Calm Mode flow works
-- [ ] What-if simulator works
-- [ ] Firestore stores core records
-- [ ] Cloud Run URL is public
-- [ ] Demo video recorded
-- [ ] Slides prepared
+When time allows, the next incremental improvement is to replace the mocked `search_policy_guidelines` tool body with a real Vertex AI Search or Discovery Engine retrieval call while keeping the rest of the flow unchanged.

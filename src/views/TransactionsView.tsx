@@ -1,74 +1,120 @@
-import React, { useState } from "react";
-import { Coffee, ShoppingBag, Zap, ArrowDownLeft, ArrowUpRight } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
+import React, { useEffect, useState } from "react";
+import { Coffee, ShoppingBag, Zap, ArrowDownLeft, ArrowRightLeft } from "lucide-react";
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 
-const data = [
-  { name: "Mon", spend: 45 },
-  { name: "Tue", spend: 120 },
-  { name: "Wed", spend: 35 },
-  { name: "Thu", spend: 80 },
-  { name: "Fri", spend: 210 },
-  { name: "Sat", spend: 150 },
-  { name: "Sun", spend: 90 },
-];
+import { createMockDashboardData, type AppTransaction } from "@/data/mockTransactions";
+import { getTransactionsData } from "@/lib/dataProvider";
 
-const transactions = [
-  { id: 1, title: "Starbucks", category: "Food & Dining", amount: -18.50, date: "Today, 9:41 AM", icon: <Coffee className="w-4 h-4" />, color: "bg-nutty-warning-bg text-[#8B4513]" },
-  { id: 2, title: "Unifi Broadband", category: "Bills", amount: -159.00, date: "Yesterday", icon: <Zap className="w-4 h-4" />, color: "bg-nutty-bg text-nutty-primary" },
-  { id: 3, title: "Salary", category: "Income", amount: 4500.00, date: "Oct 1", icon: <ArrowDownLeft className="w-4 h-4" />, color: "bg-[#E8F0E8] text-nutty-safe", isIncome: true },
-  { id: 4, title: "Shopee", category: "Shopping", amount: -124.30, date: "Sep 28", icon: <ShoppingBag className="w-4 h-4" />, color: "bg-nutty-bg text-nutty-secondary" },
-];
+const fallbackDashboard = createMockDashboardData();
+
+const iconMap = {
+  coffee: <Coffee className="h-4 w-4" />,
+  bill: <Zap className="h-4 w-4" />,
+  income: <ArrowDownLeft className="h-4 w-4" />,
+  shopping: <ShoppingBag className="h-4 w-4" />,
+  transfer: <ArrowRightLeft className="h-4 w-4" />,
+};
+
+const colorMap = {
+  warning: "bg-nutty-warning-bg text-[#8B4513]",
+  primary: "bg-nutty-bg text-nutty-primary",
+  safe: "bg-[#E8F0E8] text-nutty-safe",
+  secondary: "bg-nutty-bg text-nutty-secondary",
+};
 
 export default function TransactionsView() {
   const [activeTab, setActiveTab] = useState<"all" | "income" | "expenses">("all");
+  const [transactions, setTransactions] = useState<AppTransaction[]>(fallbackDashboard.transactions);
+  const [weeklySpending, setWeeklySpending] = useState(fallbackDashboard.weeklySpending);
+  const [totalWeeklySpend, setTotalWeeklySpend] = useState(fallbackDashboard.totalWeeklySpend);
+  const [periodLabel, setPeriodLabel] = useState(fallbackDashboard.periodLabel);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    getTransactionsData()
+      .then((data) => {
+        if (!isMounted) {
+          return;
+        }
+
+        setTransactions(data.transactions);
+        setWeeklySpending(data.weeklySpending);
+        setTotalWeeklySpend(data.totalWeeklySpend);
+        setPeriodLabel(data.periodLabel);
+      })
+      .catch(() => {
+        // Keep mock fallback data.
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const filteredTransactions = transactions.filter((transaction) => {
+    if (activeTab === "income") {
+      return transaction.isIncome;
+    }
+
+    if (activeTab === "expenses") {
+      return !transaction.isIncome;
+    }
+
+    return true;
+  });
 
   return (
-    <div className="flex flex-col h-full overflow-y-auto bg-nutty-bg pb-8">
-      {/* Header */}
-      <div className="px-6 pt-12 pb-4">
-        <h1 className="text-2xl font-bold text-nutty-text-main mb-1">Spending</h1>
+    <div className="flex h-full flex-col overflow-y-auto bg-nutty-bg pb-8">
+      <div className="px-6 pb-4 pt-12">
+        <h1 className="mb-1 text-2xl font-bold text-nutty-text-main">Spending</h1>
         <p className="text-sm text-nutty-text-muted">This week</p>
       </div>
 
-      {/* Chart Area */}
-      <div className="px-6 mb-8">
-        <div className="bg-nutty-card rounded-3xl p-5 border border-nutty-border">
-          <div className="flex justify-between items-end mb-6">
+      <div className="mb-8 px-6">
+        <div className="rounded-3xl border border-nutty-border bg-nutty-card p-5">
+          <div className="mb-6 flex items-end justify-between">
             <div>
-              <p className="text-xs font-medium text-nutty-text-muted mb-1">Total Spent</p>
-              <p className="text-3xl font-bold text-nutty-text-main">RM 730.00</p>
+              <p className="mb-1 text-xs font-medium text-nutty-text-muted">Total Spent</p>
+              <p className="text-3xl font-bold text-nutty-text-main">
+                RM {totalWeeklySpend.toFixed(2)}
+              </p>
             </div>
-            <div className="bg-nutty-bg px-2 py-1 rounded-lg text-xs font-medium text-nutty-text-muted border border-nutty-border shadow-sm">
-              Oct 1 - 7
+            <div className="rounded-lg border border-nutty-border bg-nutty-bg px-2 py-1 text-xs font-medium text-nutty-text-muted shadow-sm">
+              {periodLabel}
             </div>
           </div>
-          
+
           <div className="h-40 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <XAxis 
-                  dataKey="name" 
-                  axisLine={false} 
-                  tickLine={false} 
-                  tick={{ fontSize: 10, fill: '#6B6B61' }} 
+              <BarChart data={weeklySpending} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <XAxis
+                  dataKey="name"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fontSize: 10, fill: "#6B6B61" }}
                   dy={10}
                 />
-                <Tooltip 
-                  cursor={{ fill: 'transparent' }}
+                <Tooltip
+                  cursor={{ fill: "transparent" }}
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-nutty-primary text-white text-xs font-medium px-2 py-1 rounded-lg shadow-xl">
+                        <div className="rounded-lg bg-nutty-primary px-2 py-1 text-xs font-medium text-white shadow-xl">
                           RM {payload[0].value}
                         </div>
                       );
                     }
+
                     return null;
                   }}
                 />
                 <Bar dataKey="spend" radius={[4, 4, 4, 4]}>
-                  {data.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.spend > 150 ? '#4A4A32' : '#A3A380'} />
+                  {weeklySpending.map((entry) => (
+                    <Cell
+                      key={entry.name}
+                      fill={entry.spend > 150 ? "#4A4A32" : "#A3A380"}
+                    />
                   ))}
                 </Bar>
               </BarChart>
@@ -77,37 +123,49 @@ export default function TransactionsView() {
         </div>
       </div>
 
-      {/* Transactions List */}
-      <div className="px-6 flex-1">
-        <div className="flex items-center justify-between mb-4">
+      <div className="flex-1 px-6">
+        <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-bold text-nutty-text-main">Recent</h3>
-          <div className="flex gap-2 bg-nutty-border p-1 rounded-xl">
-            <TabButton active={activeTab === "all"} onClick={() => setActiveTab("all")}>All</TabButton>
-            <TabButton active={activeTab === "expenses"} onClick={() => setActiveTab("expenses")}>Out</TabButton>
-            <TabButton active={activeTab === "income"} onClick={() => setActiveTab("income")}>In</TabButton>
+          <div className="flex gap-2 rounded-xl bg-nutty-border p-1">
+            <TabButton active={activeTab === "all"} onClick={() => setActiveTab("all")}>
+              All
+            </TabButton>
+            <TabButton active={activeTab === "expenses"} onClick={() => setActiveTab("expenses")}>
+              Out
+            </TabButton>
+            <TabButton active={activeTab === "income"} onClick={() => setActiveTab("income")}>
+              In
+            </TabButton>
           </div>
         </div>
 
         <div className="flex flex-col gap-4">
-          {transactions
-            .filter(t => {
-              if (activeTab === "income") return t.isIncome;
-              if (activeTab === "expenses") return !t.isIncome;
-              return true;
-            })
-            .map((tx) => (
-            <div key={tx.id} className="flex items-center justify-between p-3 hover:bg-nutty-card rounded-2xl transition-colors cursor-pointer">
+          {filteredTransactions.map((transaction) => (
+            <div
+              key={transaction.id}
+              className="flex cursor-pointer items-center justify-between rounded-2xl p-3 transition-colors hover:bg-nutty-card"
+            >
               <div className="flex items-center gap-4">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${tx.color}`}>
-                  {tx.icon}
+                <div
+                  className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
+                    colorMap[transaction.colorKey]
+                  }`}
+                >
+                  {iconMap[transaction.iconKey]}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-nutty-text-main">{tx.title}</p>
-                  <p className="text-xs text-nutty-text-muted">{tx.date} • {tx.category}</p>
+                  <p className="text-sm font-bold text-nutty-text-main">{transaction.title}</p>
+                  <p className="text-xs text-nutty-text-muted">
+                    {transaction.date} • {transaction.category}
+                  </p>
                 </div>
               </div>
-              <p className={`text-sm font-bold ${tx.isIncome ? 'text-nutty-safe' : 'text-nutty-text-main'}`}>
-                {tx.isIncome ? '+' : ''}{tx.amount > 0 ? tx.amount.toFixed(2) : Math.abs(tx.amount).toFixed(2)}
+              <p
+                className={`text-sm font-bold ${
+                  transaction.isIncome ? "text-nutty-safe" : "text-nutty-text-main"
+                }`}
+              >
+                {transaction.amount >= 0 ? "+" : "-"}RM {Math.abs(transaction.amount).toFixed(2)}
               </p>
             </div>
           ))}
@@ -117,12 +175,20 @@ export default function TransactionsView() {
   );
 }
 
-function TabButton({ children, active, onClick }: { children: React.ReactNode; active: boolean; onClick: () => void }) {
+function TabButton({
+  children,
+  active,
+  onClick,
+}: {
+  children: React.ReactNode;
+  active: boolean;
+  onClick: () => void;
+}) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`px-3 py-1 text-xs font-medium rounded-lg transition-all ${
-        active ? 'bg-nutty-card text-nutty-text-main shadow-sm' : 'text-nutty-text-muted hover:text-nutty-text-main'
+      className={`rounded-lg px-3 py-1 text-xs font-medium transition-all ${
+        active ? "bg-nutty-card text-nutty-text-main shadow-sm" : "text-nutty-text-muted hover:text-nutty-text-main"
       }`}
     >
       {children}
