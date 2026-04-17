@@ -1,4 +1,4 @@
-# Nutty-Fi Calm Mode MVP Plan
+# Nutty-Fi Calm Mode Plan
 
 ## Summary
 
