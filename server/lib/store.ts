@@ -201,11 +201,5 @@ export async function getPolicySearchResult(query: string) {
 }
 
 export function getRuntimeDataMode() {
-  const hasFirestoreRuntimeHints = Boolean(
-    process.env.K_SERVICE ||
-      process.env.GOOGLE_APPLICATION_CREDENTIALS ||
-      process.env.FIREBASE_PROJECT_ID,
-  );
-
-  return getAdminFirestore() && hasFirestoreRuntimeHints ? "firestore" : "memory";
+  return getAdminFirestore() ? "firestore" : "memory";
 }

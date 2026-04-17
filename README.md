@@ -16,10 +16,10 @@ Banking chats often stop at conversation. Nutty-Fi pushes one step further:
 - Frontend: Vite + React
 - Backend: Express + Genkit + Gemini tool-calling
 - Data:
-  - server writes use Firebase Admin + Firestore when available
-  - server falls back to in-memory state when Firestore is unavailable
-  - frontend reads use Firestore when configured
-  - frontend falls back to `src/data/mockTransactions.ts`
+  - Firestore already exists in the Firebase project and is the default persistence layer
+  - server reads and writes use Firebase Admin + Firestore by default
+  - frontend reads use Firestore by default when `VITE_FIREBASE_*` config is present
+  - fallback mode only exists so the demo stays usable when Firestore access or Firebase config is unavailable
 - Deployment: one Node.js Cloud Run service serving both API routes and the built SPA
 
 ## Current MVP Flow
@@ -53,7 +53,7 @@ Required for the full hackathon path:
 
 - `GEMINI_API_KEY`
 
-Optional frontend Firestore read config:
+Frontend Firestore read config for Cloud Run source deploy:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
@@ -65,6 +65,10 @@ Optional frontend Firestore read config:
 Optional server hint:
 
 - `FIREBASE_PROJECT_ID`
+
+Cloud Run note:
+
+- keep `GEMINI_API_KEY` in Secret Manager and expose it to the service as a secret-backed env var
 
 ## Local Development
 
@@ -126,7 +130,8 @@ Prerequisites:
 
 - Google Cloud project with Cloud Run and Cloud Build enabled
 - `gcloud` authenticated
-- `GEMINI_API_KEY` available
+- Firestore already exists in the Firebase project
+- `GEMINI_API_KEY` stored in Secret Manager
 
 Deploy:
 
@@ -135,7 +140,8 @@ gcloud run deploy nutty-fi \
   --source . \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars GEMINI_API_KEY=YOUR_GEMINI_API_KEY,FIREBASE_PROJECT_ID=YOUR_PROJECT_ID \
+  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --set-env-vars FIREBASE_PROJECT_ID=YOUR_PROJECT_ID \
   --set-build-env-vars VITE_FIREBASE_API_KEY=YOUR_API_KEY,VITE_FIREBASE_AUTH_DOMAIN=YOUR_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET=YOUR_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID=YOUR_APP_ID
 ```
 
@@ -143,20 +149,23 @@ Notes:
 
 - Cloud Run will run `npm run build` during source deployment.
 - Production starts from compiled JavaScript via `node dist/server/server/index.js`.
+- Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
 - On Cloud Run, server-side Firestore access should use Application Default Credentials from the service account.
+- For Cloud Run source deploy, assume the `VITE_FIREBASE_*` build variables will be provided so the frontend uses Firestore reads by default.
 
 ## Firestore Fallback Contract
 
 Frontend:
 
 - `src/lib/dataProvider.ts`
-- Firestore available -> use Firestore
-- otherwise -> use mock data
+- Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
+- When `VITE_FIREBASE_*` config is present, read from Firestore first
+- fall back to `mockTransactions` only if Firebase web config is missing or Firestore reads fail
 
 Backend:
 
-- Firebase Admin available -> write to Firestore
-- otherwise -> keep the demo working with in-memory state
+- use Firebase Admin with the default Firestore service as the primary store
+- keep in-memory fallback only for local/demo resilience when Firestore access fails
 
 ## Demo Script
 
@@ -179,3 +188,7 @@ Validated in this repo:
 - risky transfer confirmation response
 - safe transfer response
 - SPA served from the compiled Express server
+
+## Persistence Assumption
+
+Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.

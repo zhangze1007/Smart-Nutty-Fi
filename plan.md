@@ -8,6 +8,7 @@
 - Compile backend TypeScript to JavaScript before production startup.
 - Make risk enforcement deterministic and server-side.
 - Include a mocked `search_policy_guidelines` tool so the codebase contains the required grounded RAG architecture for hackathon judging.
+- Firestore already exists in the Firebase project and is the default persistence layer.
 
 ## Mandatory Constraints Applied
 
@@ -56,13 +57,14 @@ Frontend read path:
 - `src/data/mockTransactions.ts`
 - `src/lib/firebase.ts`
 - `src/lib/dataProvider.ts`
-- Firestore available -> use Firestore
-- otherwise -> use mock data
+- Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
+- Use Firestore reads by default when `VITE_FIREBASE_*` config is present.
+- Fall back to `mockTransactions` only if Firebase web config is missing or Firestore reads fail.
 
 Backend write path:
 
-- Firebase Admin + Firestore when available
-- otherwise -> use in-memory fallback
+- Use Firebase Admin with the default Firestore service as the primary store.
+- Keep in-memory fallback only for local/demo resilience when Firestore access fails.
 
 Collections used:
 
@@ -84,6 +86,7 @@ Collections used:
   - `GET /api/health`
   - `POST /api/assistant`
   - `POST /api/actions/confirm-transfer`
+- `GEMINI_API_KEY` should be injected from Secret Manager on Cloud Run, not set as a normal env var.
 
 Deterministic transfer risk rules:
 
@@ -99,6 +102,7 @@ Deterministic transfer risk rules:
 - replaced mocked chat keyword logic with `/api/assistant`
 - kept Calm Mode modal in `App.tsx`
 - moved dashboard and transactions reads onto `dataProvider`
+- assume `VITE_FIREBASE_*` build variables are provided for Cloud Run source deploy so the frontend uses Firestore by default
 
 ## Verification Targets
 
@@ -113,3 +117,7 @@ Deterministic transfer risk rules:
 ## Next Upgrade Path
 
 When time allows, the next incremental improvement is to replace the mocked `search_policy_guidelines` tool body with a real Vertex AI Search or Discovery Engine retrieval call while keeping the rest of the flow unchanged.
+
+## Persistence Assumption
+
+Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
