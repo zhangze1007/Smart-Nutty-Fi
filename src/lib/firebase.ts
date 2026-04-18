@@ -15,6 +15,21 @@ const isConfigured = Object.values(firebaseConfig).every(Boolean);
 let cachedApp: FirebaseApp | null | undefined;
 let cachedDb: Firestore | null | undefined;
 
+function supportsClientFirestore() {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const hasCoreApis =
+    typeof window.fetch === "function" &&
+    typeof window.Promise !== "undefined" &&
+    typeof window.crypto?.getRandomValues === "function";
+
+  const hasStorageApis = "indexedDB" in window;
+
+  return hasCoreApis && hasStorageApis;
+}
+
 export function isFirestoreConfigured() {
   return isConfigured;
 }
@@ -29,7 +44,17 @@ export function getFirebaseApp(): FirebaseApp | null {
     return cachedApp;
   }
 
-  cachedApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  if (!supportsClientFirestore()) {
+    cachedApp = null;
+    return cachedApp;
+  }
+
+  try {
+    cachedApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  } catch {
+    cachedApp = null;
+  }
+
   return cachedApp;
 }
 
@@ -39,6 +64,17 @@ export function getFirebaseDb(): Firestore | null {
   }
 
   const app = getFirebaseApp();
-  cachedDb = app ? getFirestore(app) : null;
+
+  if (!app) {
+    cachedDb = null;
+    return cachedDb;
+  }
+
+  try {
+    cachedDb = getFirestore(app);
+  } catch {
+    cachedDb = null;
+  }
+
   return cachedDb;
 }

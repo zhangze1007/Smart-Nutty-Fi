@@ -177,9 +177,26 @@ app.post("/api/actions/cancel-transfer", async (request, response) => {
 });
 
 if (existsSync(clientDistPath)) {
-  app.use(express.static(clientDistPath));
+  app.use(
+    express.static(clientDistPath, {
+      setHeaders: (response, filePath) => {
+        if (filePath.endsWith(".html")) {
+          response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          return;
+        }
+
+        if (filePath.includes(`${path.sep}assets${path.sep}`)) {
+          response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+          return;
+        }
+
+        response.setHeader("Cache-Control", "public, max-age=600");
+      },
+    }),
+  );
 
   app.get("*", (_request, response) => {
+    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     response.sendFile(clientIndexPath);
   });
 } else {
