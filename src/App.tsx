@@ -18,6 +18,30 @@ type View = "home" | "chat" | "transactions";
 const RISK_PROFILE_STORAGE_KEY = "nutty-risk-profile";
 const TEXT_SCALE_STORAGE_KEY = "nutty-text-scale";
 
+function safeReadStorage(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeWriteStorage(key: string, value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Some mobile browsers or embedded webviews block localStorage access.
+  }
+}
+
 function getRiskProfileLabel(riskProfile: RiskProfileId) {
   if (riskProfile === "conservative") {
     return "Conservative";
@@ -31,11 +55,7 @@ function getRiskProfileLabel(riskProfile: RiskProfileId) {
 }
 
 function readStoredRiskProfile(): RiskProfileId {
-  if (typeof window === "undefined") {
-    return "balanced";
-  }
-
-  const storedValue = window.localStorage.getItem(RISK_PROFILE_STORAGE_KEY);
+  const storedValue = safeReadStorage(RISK_PROFILE_STORAGE_KEY);
   if (
     storedValue === "conservative" ||
     storedValue === "balanced" ||
@@ -48,11 +68,7 @@ function readStoredRiskProfile(): RiskProfileId {
 }
 
 function readStoredTextScale(): TextScale {
-  if (typeof window === "undefined") {
-    return "standard";
-  }
-
-  return window.localStorage.getItem(TEXT_SCALE_STORAGE_KEY) === "large" ? "large" : "standard";
+  return safeReadStorage(TEXT_SCALE_STORAGE_KEY) === "large" ? "large" : "standard";
 }
 
 export default function App() {
@@ -66,12 +82,15 @@ export default function App() {
   const [textScale, setTextScale] = useState<TextScale>(() => readStoredTextScale());
 
   useEffect(() => {
-    window.localStorage.setItem(RISK_PROFILE_STORAGE_KEY, riskProfile);
+    safeWriteStorage(RISK_PROFILE_STORAGE_KEY, riskProfile);
   }, [riskProfile]);
 
   useEffect(() => {
-    window.localStorage.setItem(TEXT_SCALE_STORAGE_KEY, textScale);
-    document.documentElement.style.fontSize = textScale === "large" ? "18px" : "16px";
+    safeWriteStorage(TEXT_SCALE_STORAGE_KEY, textScale);
+
+    if (typeof document !== "undefined") {
+      document.documentElement.style.fontSize = textScale === "large" ? "18px" : "16px";
+    }
   }, [textScale]);
 
   const triggerRiskIntervention = (nextRiskData: RiskPrompt) => {
