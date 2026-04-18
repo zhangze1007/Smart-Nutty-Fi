@@ -1,15 +1,39 @@
 import React, { useEffect, useState } from "react";
-import { ArrowRightLeft, CreditCard, Wallet, TrendingDown, Sparkles, ArrowRight } from "lucide-react";
+import {
+  ArrowRightLeft,
+  CreditCard,
+  Wallet,
+  TrendingDown,
+  Sparkles,
+  ArrowRight,
+  ShieldCheck,
+  Type,
+} from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createMockDashboardData } from "@/data/mockTransactions";
 import { getDashboardData } from "@/lib/dataProvider";
+import type { RiskProfileId, TextScale } from "@/lib/types";
+
+const riskProfileDescriptions: Record<RiskProfileId, string> = {
+  conservative: "Lower review thresholds for extra caution around unfamiliar transfers.",
+  balanced: "Recommended default for demo use: strong checks without interrupting every transfer.",
+  flexible: "Higher review thresholds, while still pausing obvious scam or low-balance cases.",
+};
 
 export default function HomeView({
   onNavigate,
+  riskProfile,
+  onRiskProfileChange,
+  textScale,
+  onTextScaleChange,
 }: {
   onNavigate: (view: "home" | "chat" | "transactions") => void;
+  riskProfile: RiskProfileId;
+  onRiskProfileChange: (riskProfile: RiskProfileId) => void;
+  textScale: TextScale;
+  onTextScaleChange: (textScale: TextScale) => void;
 }) {
   const [simulatorAmount, setSimulatorAmount] = useState("");
   const [dashboard, setDashboard] = useState(createMockDashboardData());
@@ -24,7 +48,7 @@ export default function HomeView({
         }
       })
       .catch(() => {
-        // Keep mock fallback data.
+        // Keep fallback data if both Firestore and runtime snapshot fail.
       });
 
     return () => {
@@ -53,9 +77,12 @@ export default function HomeView({
           <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-24 w-24 rounded-full bg-nutty-secondary/20 blur-2xl"></div>
 
           <p className="relative z-10 mb-2 text-sm text-white/80">Total Balance</p>
-          <h2 className="relative z-10 mb-6 text-4xl font-bold">
+          <h2 className="relative z-10 mb-4 text-4xl font-bold">
             RM {dashboard.currentBalance.toFixed(2)}
           </h2>
+          <p className="relative z-10 mb-6 max-w-[18rem] text-sm text-white/85">
+            From chat to action, with a safety pause before high-risk money movement.
+          </p>
 
           <div className="relative z-10 flex gap-4">
             <button
@@ -102,6 +129,64 @@ export default function HomeView({
             <QuickAction icon={<TrendingDown />} label="Spending" onClick={() => onNavigate("transactions")} />
           </div>
         </div>
+
+        <Card className="overflow-hidden border-none bg-nutty-card shadow-sm">
+          <div className="border-b border-nutty-border bg-nutty-bg p-5">
+            <div className="mb-1 flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-[#C2410C]" />
+              <h3 className="text-sm font-bold text-nutty-text-main">Safety & Accessibility</h3>
+            </div>
+            <p className="text-xs text-nutty-text-muted">
+              Lightweight controls for how strongly Nutty reviews risky transfers.
+            </p>
+          </div>
+          <div className="space-y-5 p-5">
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-nutty-text-muted">
+                Risk reminder level
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                <SettingChip
+                  label="Conservative"
+                  active={riskProfile === "conservative"}
+                  onClick={() => onRiskProfileChange("conservative")}
+                />
+                <SettingChip
+                  label="Balanced"
+                  active={riskProfile === "balanced"}
+                  onClick={() => onRiskProfileChange("balanced")}
+                />
+                <SettingChip
+                  label="Flexible"
+                  active={riskProfile === "flexible"}
+                  onClick={() => onRiskProfileChange("flexible")}
+                />
+              </div>
+              <p className="mt-2 text-xs text-nutty-text-muted">{riskProfileDescriptions[riskProfile]}</p>
+            </div>
+
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Type className="h-4 w-4 text-nutty-primary" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-nutty-text-muted">
+                  Text size
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <SettingChip
+                  label="Standard"
+                  active={textScale === "standard"}
+                  onClick={() => onTextScaleChange("standard")}
+                />
+                <SettingChip
+                  label="Large"
+                  active={textScale === "large"}
+                  onClick={() => onTextScaleChange("large")}
+                />
+              </div>
+            </div>
+          </div>
+        </Card>
 
         <Card className="overflow-hidden border-none bg-nutty-card shadow-sm">
           <div className="border-b border-nutty-border bg-nutty-bg p-5">
@@ -181,6 +266,29 @@ function QuickAction({
         {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6" })}
       </div>
       <span className="text-xs font-medium text-nutty-text-muted">{label}</span>
+    </button>
+  );
+}
+
+function SettingChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
+        active
+          ? "border-nutty-primary bg-nutty-primary text-white"
+          : "border-nutty-border bg-nutty-bg text-nutty-text-main hover:bg-white"
+      }`}
+    >
+      {label}
     </button>
   );
 }

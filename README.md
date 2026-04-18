@@ -1,59 +1,122 @@
 # Nutty-Fi
 
-Nutty-Fi is a Calm Mode fintech MVP that turns a natural-language money request into an action workflow. The app keeps the existing Vite frontend, adds a minimal Genkit + Gemini backend, and deploys as a single public Cloud Run service.
+Nutty-Fi is a Calm Mode fintech MVP that turns a natural-language money request into an action workflow. The app keeps the Vite frontend, uses an Express + Genkit backend, and is designed for single-service Cloud Run deployment.
 
-## Problem
+## What Changed For Submission
 
-Banking chats often stop at conversation. Nutty-Fi pushes one step further:
+This hackathon build prioritises the highest-value judging paths:
 
-- parse a money action from chat
-- run a deterministic server-side risk check
-- pause risky transfers with Calm Mode
-- let the user explicitly confirm before execution
+- config-driven risk rules instead of hardcoded thresholds
+- structured Calm Mode reasons with policy citations
+- repo-seeded policy snippets with Firestore override
+- Firestore-first runtime with fallback preserved
+- explicit `Pause for now` / `Continue after review` flow
+- minimal logging for `risk_triggered`, `risk_confirmed`, and `risk_cancelled`
+- lightweight Safety & Accessibility controls on the home screen
+
+## Core Flow
+
+`chat request` -> `intent parse` -> `config-driven risk check` -> `policy lookup` -> `Calm Mode modal` -> `pause or continue` -> `transfer/log persistence`
+
+Examples:
+
+- risky: `Transfer RM5000 to Crypto Exchange`
+- safe: `Transfer RM50 to Ali`
 
 ## Architecture
 
 - Frontend: Vite + React
-- Backend: Express + Genkit + Gemini tool-calling
-- Data:
-  - Firestore already exists in the Firebase project and is the default persistence layer
-  - server reads and writes use Firebase Admin + Firestore by default
-  - frontend reads use Firestore by default when `VITE_FIREBASE_*` config is present
-  - fallback mode only exists so the demo stays usable when Firestore access or Firebase config is unavailable
-- Deployment: one Node.js Cloud Run service serving both API routes and the built SPA
+- Backend: Express + Genkit + Gemini fallback parser support
+- Primary persistence: Firestore
+- Fallback persistence: in-memory state when Firestore is unavailable
+- Deployment: one Cloud Run service serving both API routes and the built SPA
 
-## Current MVP Flow
+## Risk Rules
 
-The first fully wired flow is:
+Risk evaluation stays deterministic and server-side.
 
-`chat request` -> `intent parse` -> `deterministic risk check` -> `search_policy_guidelines` mocked RAG tool -> `Calm Mode UI` -> `confirm-transfer endpoint` -> `transaction write` -> `success response`
+Profiles:
 
-Examples:
+- `conservative`
+- `balanced` (default)
+- `flexible`
 
-- `Transfer RM5000 to Crypto Exchange`
-- `Transfer RM50 to Ali`
+Default thresholds:
 
-## Genkit Tools
+- `conservative`: confirm above RM500, low-balance warning below RM800
+- `balanced`: confirm above RM1000, low-balance warning below RM500
+- `flexible`: confirm above RM2000, low-balance warning below RM250
 
-The backend defines these tools:
+Other rules:
 
-- `risk_check`
-- `search_policy_guidelines`
-- `transfer_money`
-- `pay_bill`
-- `calculate_cashflow`
+- recipient contains a configured high-risk keyword such as `crypto`, `exchange`, or `wallet`
+- recipient is not in the known payee list
+- projected remaining balance after upcoming bills drops below the profile threshold
 
-Important: `risk_check` is fully deterministic and server-side. Gemini can parse intent and generate explanations, but it does not decide whether a risky transfer is allowed.
+## Policy Snippets
+
+Calm Mode explanations are grounded with a small seeded policy dataset in the repo. At runtime:
+
+- server tries Firestore collection `policyDocuments` first
+- if no valid Firestore documents are available, server falls back to repo seeds
+
+Seeded documents are short paraphrased snippets with source labels and URLs, including:
+
+- Bank Negara Malaysia Museum and Art Gallery AMLA money-mule education
+- Bank Negara Malaysia Financial Consumer Alert List
+- Bank Negara Malaysia Financial Fraud Alert
+- Malaysia AMLA / Act 613 reference
+
+## API Surface
+
+Main endpoints:
+
+- `GET /api/health`
+- `GET /api/runtime/dashboard`
+- `POST /api/assistant`
+- `POST /api/actions/confirm-transfer`
+- `POST /api/actions/cancel-transfer`
+
+`/api/health` reports:
+
+- Gemini configured or missing
+- runtime data mode
+- policy source
+- risk config source
+
+`/api/runtime/dashboard` keeps the demo coherent when frontend Firestore reads are unavailable, so the UI can still read server runtime state instead of falling back immediately to static mock data.
+
+## Data & Logging
+
+Firestore-first collections/documents used by this build:
+
+- `appState/demo`
+- `transactions`
+- `logs`
+- `policyDocuments`
+- `simulations`
+
+Risk logs written by the server:
+
+- `risk_triggered`
+- `risk_confirmed`
+- `risk_cancelled`
+
+If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
 
 ## Environment Variables
 
 Create a local `.env` from `.env.example`.
 
-Required for the full hackathon path:
+Full-path runtime:
 
 - `GEMINI_API_KEY`
 
-Frontend Firestore read config for Cloud Run source deploy:
+Optional server hint:
+
+- `FIREBASE_PROJECT_ID`
+
+Optional frontend Firestore config:
 
 - `VITE_FIREBASE_API_KEY`
 - `VITE_FIREBASE_AUTH_DOMAIN`
@@ -62,13 +125,23 @@ Frontend Firestore read config for Cloud Run source deploy:
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 
-Optional server hint:
+Optional risk configuration overrides:
 
-- `FIREBASE_PROJECT_ID`
+- `RISK_DEFAULT_PROFILE`
+- `RISK_HIGH_RISK_KEYWORDS`
+- `RISK_UNKNOWN_PAYEE_REQUIRES_REVIEW`
+- `RISK_PROFILE_CONSERVATIVE_MAX_TRANSFER_WITHOUT_CONFIRM`
+- `RISK_PROFILE_CONSERVATIVE_MIN_BALANCE_THRESHOLD`
+- `RISK_PROFILE_BALANCED_MAX_TRANSFER_WITHOUT_CONFIRM`
+- `RISK_PROFILE_BALANCED_MIN_BALANCE_THRESHOLD`
+- `RISK_PROFILE_FLEXIBLE_MAX_TRANSFER_WITHOUT_CONFIRM`
+- `RISK_PROFILE_FLEXIBLE_MIN_BALANCE_THRESHOLD`
 
-Cloud Run note:
+Production note:
 
-- keep `GEMINI_API_KEY` in Secret Manager and expose it to the service as a secret-backed env var
+- keep `GEMINI_API_KEY` in Secret Manager
+- keep Firebase Admin auth on Cloud Run through Application Default Credentials
+- if sensitive overrides are not meant for build-time env vars, place them in Firestore `appConfig/risk`
 
 ## Local Development
 
@@ -78,62 +151,56 @@ Install dependencies:
 npm install
 ```
 
-Run the backend in one terminal:
+Run the backend:
 
 ```bash
 npm run dev:server
 ```
 
-Run the frontend in another terminal:
+Run the frontend:
 
 ```bash
 npm run dev:client
 ```
 
-Frontend dev server:
+Useful local URLs:
 
-- `http://localhost:3000`
+- frontend: `http://localhost:3000`
+- backend health: `http://localhost:8080/api/health`
 
-Backend health check:
+## Test & Build
 
-- `http://localhost:8080/api/health`
-
-Notes:
-
-- In local development, `/api/*` requests from Vite are proxied to the Express backend.
-- If `GEMINI_API_KEY` is missing, the backend still starts and uses a deterministic fallback parser so the Calm Mode flow can still be tested locally.
-
-## Production Build
-
-Build both frontend and backend:
+Run checks before submission:
 
 ```bash
+npm run lint
+npm run test
 npm run build
 ```
 
-This produces:
+The current essential tests cover:
 
-- frontend bundle in `dist/client`
-- compiled backend in `dist/server/server`
+- config-driven risk overrides
+- structured risk rule hits
+- repo-seeded policy fallback and Firestore override
+- runtime dashboard fallback when Firestore reads fail
 
-Start the production server locally:
+## Demo Script
 
-```bash
-npm start
-```
+1. Open the home screen and show the Safety & Accessibility section.
+2. Keep `Balanced` risk profile selected.
+3. In chat, send `Transfer RM5000 to Crypto Exchange`.
+4. Show structured Calm Mode reasons and policy citations.
+5. Click `Pause for now` to show that no money moves and the decision is logged.
+6. Retry the transfer and click `Continue after review`.
+7. Show the successful transfer response.
+8. Call `/api/health` to show runtime status and configuration source.
 
 ## Cloud Run Deployment
 
-This repo is set up for Cloud Run source deployment with a supported Node LTS runtime.
+The deployment model stays unchanged: one Node service, source-based deploy, compiled server startup.
 
-Prerequisites:
-
-- Google Cloud project with Cloud Run and Cloud Build enabled
-- `gcloud` authenticated
-- Firestore already exists in the Firebase project
-- `GEMINI_API_KEY` stored in Secret Manager
-
-Deploy:
+Example:
 
 ```bash
 gcloud run deploy nutty-fi \
@@ -145,50 +212,16 @@ gcloud run deploy nutty-fi \
   --set-build-env-vars VITE_FIREBASE_API_KEY=YOUR_API_KEY,VITE_FIREBASE_AUTH_DOMAIN=YOUR_AUTH_DOMAIN,VITE_FIREBASE_PROJECT_ID=YOUR_PROJECT_ID,VITE_FIREBASE_STORAGE_BUCKET=YOUR_STORAGE_BUCKET,VITE_FIREBASE_MESSAGING_SENDER_ID=YOUR_MESSAGING_SENDER_ID,VITE_FIREBASE_APP_ID=YOUR_APP_ID
 ```
 
-Notes:
+Cloud Run validation after deploy:
 
-- Cloud Run will run `npm run build` during source deployment.
-- Production starts from compiled JavaScript via `node dist/server/server/index.js`.
-- Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
-- On Cloud Run, server-side Firestore access should use Application Default Credentials from the service account.
-- For Cloud Run source deploy, assume the `VITE_FIREBASE_*` build variables will be provided so the frontend uses Firestore reads by default.
-
-## Firestore Fallback Contract
-
-Frontend:
-
-- `src/lib/dataProvider.ts`
-- Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
-- When `VITE_FIREBASE_*` config is present, read from Firestore first
-- fall back to `mockTransactions` only if Firebase web config is missing or Firestore reads fail
-
-Backend:
-
-- use Firebase Admin with the default Firestore service as the primary store
-- keep in-memory fallback only for local/demo resilience when Firestore access fails
-
-## Demo Script
-
-1. Open chat and send `Transfer RM5000 to Crypto Exchange`
-2. Backend parses the request
-3. Deterministic risk rules trigger Calm Mode
-4. Mocked policy search tool returns grounded policy text
-5. Calm Mode modal asks the user to pause or continue
-6. Confirming the transfer hits `/api/actions/confirm-transfer`
-7. The backend writes the transaction and returns a success response
-
-## Verification
-
-Validated in this repo:
-
-- `npm run lint`
-- `npm run build`
 - `GET /api/health`
-- risky transfer assistant response
-- risky transfer confirmation response
-- safe transfer response
-- SPA served from the compiled Express server
+- safe transfer path
+- risky transfer path
+- pause flow
+- continue flow
 
-## Persistence Assumption
+## Notes
 
-Firestore already exists in the project. The app should use Firestore by default and only fall back when Firestore access is unavailable.
+- Gemini is optional for local development. Without `GEMINI_API_KEY`, the backend falls back to deterministic intent parsing.
+- Policy snippets in this repo are short paraphrases plus source metadata, not full documents.
+- BigQuery and expanded analytics were intentionally deferred to reduce deployment risk for the hackathon build.

@@ -1,20 +1,49 @@
 import { genkit, z } from "genkit";
 import { googleAI } from "@genkit-ai/google-genai";
 
-import { assessTransferRisk } from "./lib/risk.js";
+import {
+  getLatestRiskConfigSource,
+  loadRiskConfig,
+  normalizeRiskProfileId,
+  resolveRiskConfig,
+} from "./config/riskConfig.js";
+import { assessTransferRisk, isRiskRuleCode } from "./lib/risk.js";
 import {
   getAccountSnapshot,
+  getPolicyDataSource,
   getPolicySearchResult,
   getRuntimeDataMode,
-  recordRiskEvent,
+  recordRiskLog,
   recordSimulation,
   saveTransfer,
+  type PolicyCitation,
 } from "./lib/store.js";
 
 const geminiConfigured = Boolean(process.env.GEMINI_API_KEY);
 
 const ai = genkit({
   plugins: geminiConfigured ? [googleAI()] : [],
+});
+
+const RiskProfileSchema = z.enum(["conservative", "balanced", "flexible"]);
+
+const PolicyCitationSchema = z.object({
+  title: z.string(),
+  source: z.string(),
+  url: z.string().url(),
+});
+
+const RiskRuleHitSchema = z.object({
+  code: z.enum([
+    "amount_threshold",
+    "high_risk_keyword",
+    "unknown_payee",
+    "low_remaining_balance",
+  ]),
+  title: z.string(),
+  detail: z.string(),
+  severity: z.enum(["medium", "high"]),
+  policyTopics: z.array(z.string()),
 });
 
 const AssistantResponseSchema = z.object({
@@ -32,7 +61,12 @@ const AssistantResponseSchema = z.object({
     .object({
       active: z.literal(true),
       reasons: z.array(z.string()),
-      severity: z.literal("high"),
+      severity: z.enum(["medium", "high"]),
+      ruleHits: z.array(RiskRuleHitSchema),
+      policySummary: z.string(),
+      citations: z.array(PolicyCitationSchema),
+      riskLogId: z.string().nullable(),
+      appliedProfile: RiskProfileSchema,
     })
     .nullable(),
   confirmation: z
@@ -65,31 +99,47 @@ const riskCheckTool = ai.defineTool(
       currentBalance: z.number(),
       upcomingBills: z.number(),
       knownPayees: z.array(z.string()),
+      riskProfile: RiskProfileSchema.optional(),
     }),
     outputSchema: z.object({
       risky: z.boolean(),
       reasons: z.array(z.string()),
+      ruleHits: z.array(RiskRuleHitSchema),
       projectedRemainingBalance: z.number(),
       knownPayee: z.boolean(),
+      appliedProfile: RiskProfileSchema,
+      thresholds: z.object({
+        maxTransferWithoutConfirm: z.number(),
+        minBalanceThreshold: z.number(),
+      }),
     }),
   },
-  async (input) => assessTransferRisk(input),
+  async ({ riskProfile, ...input }) => {
+    const config = resolveRiskConfig(await loadRiskConfig(), riskProfile ?? undefined);
+    return assessTransferRisk(input, config);
+  },
 );
 
 const searchPolicyGuidelinesTool = ai.defineTool(
   {
     name: "search_policy_guidelines",
     description:
-      "Retrieves financial risk and policy guidance for Calm Mode explanations, including AML and scam-prevention context.",
+      "Retrieves policy guidance for Calm Mode explanations, preferring seeded or Firestore-backed regulatory snippets before summarising them.",
     inputSchema: z.object({
       query: z.string(),
+      topics: z.array(z.string()).optional(),
     }),
     outputSchema: z.object({
-      guidance: z.string(),
-      citations: z.array(z.string()),
+      summary: z.string(),
+      citations: z.array(PolicyCitationSchema),
+      source: z.enum(["firestore", "seed"]),
     }),
   },
-  async ({ query }) => getPolicySearchResult(query),
+  async ({ query, topics }) =>
+    getPolicySearchResult({
+      query,
+      topics,
+    }),
 );
 
 const transferMoneyTool = ai.defineTool(
@@ -101,6 +151,7 @@ const transferMoneyTool = ai.defineTool(
       recipient: z.string(),
       amount: z.number(),
       acknowledgedRisk: z.boolean(),
+      riskProfile: RiskProfileSchema.optional(),
     }),
     outputSchema: z.object({
       success: z.boolean(),
@@ -109,17 +160,22 @@ const transferMoneyTool = ai.defineTool(
       transactionId: z.string().nullable(),
       currentBalance: z.number(),
       reasons: z.array(z.string()),
+      appliedProfile: RiskProfileSchema,
     }),
   },
-  async ({ recipient, amount, acknowledgedRisk }) => {
+  async ({ recipient, amount, acknowledgedRisk, riskProfile }) => {
     const accountSnapshot = await getAccountSnapshot();
-    const risk = assessTransferRisk({
-      recipient,
-      amount,
-      currentBalance: accountSnapshot.currentBalance,
-      upcomingBills: accountSnapshot.upcomingBills,
-      knownPayees: accountSnapshot.knownPayees,
-    });
+    const config = resolveRiskConfig(await loadRiskConfig(), riskProfile ?? undefined);
+    const risk = assessTransferRisk(
+      {
+        recipient,
+        amount,
+        currentBalance: accountSnapshot.currentBalance,
+        upcomingBills: accountSnapshot.upcomingBills,
+        knownPayees: accountSnapshot.knownPayees,
+      },
+      config,
+    );
 
     if (risk.risky && !acknowledgedRisk) {
       return {
@@ -129,6 +185,7 @@ const transferMoneyTool = ai.defineTool(
         transactionId: null,
         currentBalance: accountSnapshot.currentBalance,
         reasons: risk.reasons,
+        appliedProfile: risk.appliedProfile,
       };
     }
 
@@ -146,6 +203,7 @@ const transferMoneyTool = ai.defineTool(
       transactionId: transaction.id,
       currentBalance,
       reasons: risk.reasons,
+      appliedProfile: risk.appliedProfile,
     };
   },
 );
@@ -310,20 +368,31 @@ User message: ${message}
   }
 }
 
-async function generateCalmModeReply(input: {
-  message: string;
+function createCalmModeFallbackReply(input: {
   recipient: string;
   amount: number;
   reasons: string[];
+  policySummary: string;
+  citations: PolicyCitation[];
+}) {
+  const primaryReason = input.reasons[0] ?? "this transfer needs review";
+  const primaryCitation = input.citations[0]?.source ?? "official guidance";
+
+  return `Nutty paused RM${input.amount.toFixed(
+    2,
+  )} to ${input.recipient} because ${primaryReason} ${input.policySummary} Please pause unless you have verified the recipient using ${primaryCitation}.`;
+}
+
+async function generateCalmModeReply(input: {
+  recipient: string;
+  amount: number;
+  reasons: string[];
+  policySummary: string;
+  citations: PolicyCitation[];
+  explanationTone: "cautious" | "balanced" | "light";
 }) {
   if (!geminiConfigured) {
-    const searchResult = await searchPolicyGuidelinesTool.run({
-      query: `Transfer to ${input.recipient} for RM${input.amount.toFixed(2)}`,
-    });
-
-    return `Nutty paused this transfer because ${input.reasons.join(
-      " ",
-    )} Policy context: ${searchResult.result.guidance}`;
+    return createCalmModeFallbackReply(input);
   }
 
   try {
@@ -331,35 +400,31 @@ async function generateCalmModeReply(input: {
       model: googleAI.model("gemini-2.5-flash"),
       prompt: `
 You are Nutty-Fi's Calm Mode explainer.
-You must call the search_policy_guidelines tool exactly once before writing the answer.
-Keep the reply under 70 words.
-Explain clearly why the transfer was paused, mention the policy guidance briefly, and end by asking the user to pause or continue only if they understand the risk.
+Write a short explanation under 85 words.
+Be clear, calm, and specific.
 
-Original user message: ${input.message}
-Recipient: ${input.recipient}
-Amount: RM${input.amount.toFixed(2)}
+Transfer recipient: ${input.recipient}
+Transfer amount: RM${input.amount.toFixed(2)}
+Explanation tone: ${input.explanationTone}
 Risk reasons:
 ${input.reasons.map((reason) => `- ${reason}`).join("\n")}
+
+Policy summary:
+${input.policySummary}
+
+Citations to reference briefly:
+${input.citations.map((citation) => `- ${citation.title} (${citation.source})`).join("\n")}
+
+End by telling the user to continue only if they have verified the transfer.
       `,
-      tools: [searchPolicyGuidelinesTool],
-      maxTurns: 3,
       config: {
         temperature: 0.2,
       },
     });
 
-    return (
-      response.text ??
-      `Nutty paused this transfer because ${input.reasons.join(" ")} Please review the risk before continuing.`
-    );
+    return response.text?.trim() || createCalmModeFallbackReply(input);
   } catch {
-    const searchResult = await searchPolicyGuidelinesTool.run({
-      query: `Transfer to ${input.recipient} for RM${input.amount.toFixed(2)}`,
-    });
-
-    return `Nutty paused this transfer because ${input.reasons.join(
-      " ",
-    )} Policy context: ${searchResult.result.guidance}`;
+    return createCalmModeFallbackReply(input);
   }
 }
 
@@ -374,16 +439,22 @@ function buildErrorResponse(reply: string): AssistantResponse {
   };
 }
 
+function resolveRequestedProfile(riskProfile: unknown) {
+  return normalizeRiskProfileId(riskProfile);
+}
+
 export const assistantFlow = ai.defineFlow(
   {
     name: "nuttyAssistantFlow",
     inputSchema: z.object({
       message: z.string(),
+      riskProfile: RiskProfileSchema.optional(),
     }),
     outputSchema: AssistantResponseSchema,
   },
-  async ({ message }): Promise<AssistantResponse> => {
+  async ({ message, riskProfile }): Promise<AssistantResponse> => {
     const parsedIntent = await parseIntent(message);
+    const requestedProfile = resolveRequestedProfile(riskProfile);
 
     if (parsedIntent.intent === "transfer_money") {
       if (!parsedIntent.recipient || !parsedIntent.amount) {
@@ -404,20 +475,33 @@ export const assistantFlow = ai.defineFlow(
         currentBalance: accountSnapshot.currentBalance,
         upcomingBills: accountSnapshot.upcomingBills,
         knownPayees: accountSnapshot.knownPayees,
+        riskProfile: requestedProfile ?? undefined,
       });
 
       if (riskCheck.result.risky) {
-        const reply = await generateCalmModeReply({
-          message,
-          recipient: parsedIntent.recipient,
-          amount: parsedIntent.amount,
-          reasons: riskCheck.result.reasons,
+        const policySearch = await searchPolicyGuidelinesTool.run({
+          query: `Transfer RM${parsedIntent.amount.toFixed(2)} to ${parsedIntent.recipient}`,
+          topics: Array.from(
+            new Set(riskCheck.result.ruleHits.flatMap((ruleHit) => ruleHit.policyTopics)),
+          ),
         });
 
-        await recordRiskEvent({
+        const activeConfig = resolveRiskConfig(await loadRiskConfig(), riskCheck.result.appliedProfile);
+        const reply = await generateCalmModeReply({
           recipient: parsedIntent.recipient,
           amount: parsedIntent.amount,
           reasons: riskCheck.result.reasons,
+          policySummary: policySearch.result.summary,
+          citations: policySearch.result.citations,
+          explanationTone: activeConfig.explanationTone,
+        });
+
+        const riskLog = await recordRiskLog({
+          eventType: "risk_triggered",
+          recipient: parsedIntent.recipient,
+          amount: parsedIntent.amount,
+          ruleCodes: riskCheck.result.ruleHits.map((ruleHit) => ruleHit.code),
+          riskProfile: riskCheck.result.appliedProfile,
           message: reply,
         });
 
@@ -433,7 +517,14 @@ export const assistantFlow = ai.defineFlow(
           calmMode: {
             active: true,
             reasons: riskCheck.result.reasons,
-            severity: "high",
+            severity: riskCheck.result.ruleHits.some((ruleHit) => ruleHit.severity === "high")
+              ? "high"
+              : "medium",
+            ruleHits: riskCheck.result.ruleHits,
+            policySummary: policySearch.result.summary,
+            citations: policySearch.result.citations,
+            riskLogId: riskLog.id,
+            appliedProfile: riskCheck.result.appliedProfile,
           },
           confirmation: {
             recipient: parsedIntent.recipient,
@@ -446,6 +537,7 @@ export const assistantFlow = ai.defineFlow(
         recipient: parsedIntent.recipient,
         amount: parsedIntent.amount,
         acknowledgedRisk: false,
+        riskProfile: requestedProfile ?? undefined,
       });
 
       if (!transferResult.result.success) {
@@ -526,20 +618,35 @@ export async function confirmTransfer(input: {
   recipient: string;
   amount: number;
   acknowledgedRisk: boolean;
+  riskLogId?: string | null;
+  ruleCodes?: string[];
+  riskProfile?: string | null;
 }): Promise<AssistantResponse> {
   if (!input.acknowledgedRisk) {
     return buildErrorResponse("Calm Mode confirmation is required before this transfer can proceed.");
   }
 
+  const requestedProfile = resolveRequestedProfile(input.riskProfile);
   const transferResult = await transferMoneyTool.run({
     recipient: input.recipient,
     amount: input.amount,
     acknowledgedRisk: true,
+    riskProfile: requestedProfile ?? undefined,
   });
 
   if (!transferResult.result.success) {
     return buildErrorResponse(transferResult.result.message);
   }
+
+  await recordRiskLog({
+    eventType: "risk_confirmed",
+    recipient: input.recipient,
+    amount: input.amount,
+    ruleCodes: (input.ruleCodes ?? []).filter(isRiskRuleCode),
+    riskProfile: transferResult.result.appliedProfile,
+    relatedRiskLogId: input.riskLogId ?? undefined,
+    message: "User reviewed Calm Mode and continued with the transfer.",
+  });
 
   return {
     reply: `${transferResult.result.message} Nutty logged your risk acknowledgement.`,
@@ -555,9 +662,40 @@ export async function confirmTransfer(input: {
   };
 }
 
+export async function cancelTransfer(input: {
+  recipient: string;
+  amount: number;
+  riskLogId?: string | null;
+  ruleCodes?: string[];
+  riskProfile?: string | null;
+}): Promise<AssistantResponse> {
+  const config = resolveRiskConfig(await loadRiskConfig(), resolveRequestedProfile(input.riskProfile));
+
+  await recordRiskLog({
+    eventType: "risk_cancelled",
+    recipient: input.recipient,
+    amount: input.amount,
+    ruleCodes: (input.ruleCodes ?? []).filter(isRiskRuleCode),
+    riskProfile: config.requestedProfile,
+    relatedRiskLogId: input.riskLogId ?? undefined,
+    message: "User paused the transfer instead of continuing immediately.",
+  });
+
+  return {
+    reply: "Nutty paused the transfer. No money moved. Review the recipient and continue later only if you still trust it.",
+    intent: "transfer_money",
+    status: "info",
+    actionCard: null,
+    calmMode: null,
+    confirmation: null,
+  };
+}
+
 export function getBackendStatus() {
   return {
     gemini: geminiConfigured ? "configured" : "missing",
     dataMode: getRuntimeDataMode(),
+    policySource: getPolicyDataSource(),
+    riskConfigSource: getLatestRiskConfigSource(),
   };
 }

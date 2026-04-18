@@ -65,54 +65,67 @@ function createFallbackDashboard() {
   return createMockDashboardData();
 }
 
+async function fetchRuntimeDashboard() {
+  const response = await fetch("/api/runtime/dashboard");
+
+  if (!response.ok) {
+    throw new Error("Runtime dashboard request failed.");
+  }
+
+  return (await response.json()) as DashboardData;
+}
+
 export async function getDashboardData(): Promise<DashboardData> {
   const fallback = createFallbackDashboard();
   const db = getFirebaseDb();
 
-  if (!db) {
-    return fallback;
+  if (db) {
+    try {
+      const [stateSnapshot, transactionsSnapshot] = await Promise.all([
+        getDoc(doc(db, "appState", "demo")),
+        getDocs(collection(db, "transactions")),
+      ]);
+
+      if (stateSnapshot.exists()) {
+        const state = stateSnapshot.data();
+        const transactions = sortTransactions(
+          transactionsSnapshot.docs
+            .map((transactionDoc) => normalizeTransaction(transactionDoc.id, transactionDoc.data()))
+            .filter((transaction): transaction is AppTransaction => transaction !== null),
+        );
+
+        const weeklySpending = Array.isArray(state.weeklySpending)
+          ? state.weeklySpending
+              .map((point: unknown) => normalizeSpendingPoint(point))
+              .filter((point): point is SpendingPoint => point !== null)
+          : fallback.weeklySpending;
+
+        return {
+          currentBalance:
+            typeof state.currentBalance === "number" ? state.currentBalance : fallback.currentBalance,
+          upcomingBills:
+            typeof state.upcomingBills === "number" ? state.upcomingBills : fallback.upcomingBills,
+          knownPayees:
+            Array.isArray(state.knownPayees) &&
+            state.knownPayees.every((payee) => typeof payee === "string")
+              ? [...state.knownPayees]
+              : fallback.knownPayees,
+          periodLabel:
+            typeof state.periodLabel === "string" ? state.periodLabel : fallback.periodLabel,
+          weeklySpending: weeklySpending.length ? weeklySpending : fallback.weeklySpending,
+          totalWeeklySpend: weeklySpending.length
+            ? weeklySpending.reduce((sum, point) => sum + point.spend, 0)
+            : fallback.totalWeeklySpend,
+          transactions: transactions.length ? transactions : fallback.transactions,
+        };
+      }
+    } catch {
+      // If Firestore reads fail, try the server runtime snapshot before falling back to mock data.
+    }
   }
 
   try {
-    const [stateSnapshot, transactionsSnapshot] = await Promise.all([
-      getDoc(doc(db, "appState", "demo")),
-      getDocs(collection(db, "transactions")),
-    ]);
-
-    if (!stateSnapshot.exists()) {
-      return fallback;
-    }
-
-    const state = stateSnapshot.data();
-    const transactions = sortTransactions(
-      transactionsSnapshot.docs
-        .map((transactionDoc) => normalizeTransaction(transactionDoc.id, transactionDoc.data()))
-        .filter((transaction): transaction is AppTransaction => transaction !== null),
-    );
-
-    const weeklySpending = Array.isArray(state.weeklySpending)
-      ? state.weeklySpending
-          .map((point: unknown) => normalizeSpendingPoint(point))
-          .filter((point): point is SpendingPoint => point !== null)
-      : fallback.weeklySpending;
-
-    return {
-      currentBalance:
-        typeof state.currentBalance === "number" ? state.currentBalance : fallback.currentBalance,
-      upcomingBills:
-        typeof state.upcomingBills === "number" ? state.upcomingBills : fallback.upcomingBills,
-      knownPayees:
-        Array.isArray(state.knownPayees) && state.knownPayees.every((payee) => typeof payee === "string")
-          ? [...state.knownPayees]
-          : fallback.knownPayees,
-      periodLabel:
-        typeof state.periodLabel === "string" ? state.periodLabel : fallback.periodLabel,
-      weeklySpending: weeklySpending.length ? weeklySpending : fallback.weeklySpending,
-      totalWeeklySpend: weeklySpending.length
-        ? weeklySpending.reduce((sum, point) => sum + point.spend, 0)
-        : fallback.totalWeeklySpend,
-      transactions: transactions.length ? transactions : fallback.transactions,
-    };
+    return await fetchRuntimeDashboard();
   } catch {
     return fallback;
   }

@@ -4,7 +4,14 @@ import { Send, Sparkles, ShieldAlert, CheckCircle2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { AssistantResponse, RiskPrompt, TransferResolutionEvent } from "@/lib/types";
+import type {
+  AssistantResponse,
+  PolicyCitation,
+  RiskProfileId,
+  RiskPrompt,
+  RiskRuleHit,
+  TransferResolutionEvent,
+} from "@/lib/types";
 
 type Message = {
   id: string;
@@ -17,6 +24,11 @@ type Message = {
       amount: number;
       status: "requires_confirmation" | "completed";
       reasons: string[];
+      ruleHits: RiskRuleHit[];
+      citations: PolicyCitation[];
+      policySummary: string;
+      riskLogId: string | null;
+      appliedProfile: RiskProfileId;
     };
   };
 };
@@ -35,18 +47,37 @@ function createAssistantMessage(response: AssistantResponse): Message {
               amount: response.actionCard.amount,
               status: response.status === "requires_confirmation" ? "requires_confirmation" : "completed",
               reasons: response.calmMode?.reasons ?? [],
+              ruleHits: response.calmMode?.ruleHits ?? [],
+              citations: response.calmMode?.citations ?? [],
+              policySummary: response.calmMode?.policySummary ?? "",
+              riskLogId: response.calmMode?.riskLogId ?? null,
+              appliedProfile: response.calmMode?.appliedProfile ?? "balanced",
             },
           }
         : undefined,
   };
 }
 
+function getRiskProfileLabel(riskProfile: RiskProfileId) {
+  if (riskProfile === "conservative") {
+    return "Conservative";
+  }
+
+  if (riskProfile === "flexible") {
+    return "Flexible";
+  }
+
+  return "Balanced";
+}
+
 export default function ChatView({
   onRiskTrigger,
   transferEvent,
+  riskProfile,
 }: {
   onRiskTrigger: (riskPrompt: RiskPrompt) => void;
   transferEvent: TransferResolutionEvent | null;
+  riskProfile: RiskProfileId;
 }) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -82,6 +113,11 @@ export default function ChatView({
         amount: response.confirmation.amount,
         recipient: response.confirmation.recipient,
         reasons: response.calmMode.reasons,
+        ruleHits: response.calmMode.ruleHits,
+        citations: response.calmMode.citations,
+        policySummary: response.calmMode.policySummary,
+        riskLogId: response.calmMode.riskLogId,
+        appliedProfile: response.calmMode.appliedProfile,
       });
     }
   };
@@ -109,6 +145,7 @@ export default function ChatView({
         },
         body: JSON.stringify({
           message: userMessage.content,
+          riskProfile,
         }),
       });
 
@@ -137,7 +174,7 @@ export default function ChatView({
         <div>
           <h2 className="text-base font-bold text-nutty-text-main">Nutty</h2>
           <p className="text-xs font-medium text-nutty-safe">
-            {isSending ? "Checking..." : "Online"}
+            {isSending ? "Checking..." : `${getRiskProfileLabel(riskProfile)} profile active`}
           </p>
         </div>
       </div>
@@ -185,6 +222,11 @@ export default function ChatView({
                             amount: message.action!.data.amount,
                             recipient: message.action!.data.recipient,
                             reasons: message.action!.data.reasons,
+                            ruleHits: message.action!.data.ruleHits,
+                            citations: message.action!.data.citations,
+                            policySummary: message.action!.data.policySummary,
+                            riskLogId: message.action!.data.riskLogId,
+                            appliedProfile: message.action!.data.appliedProfile,
                           })
                         }
                       >
