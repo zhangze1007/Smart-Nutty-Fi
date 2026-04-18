@@ -20,6 +20,14 @@ export type SpendingPoint = {
   spend: number;
 };
 
+export type DemoStateInfo = {
+  baselineBalance: number;
+  seedVersion: string;
+  hasPersistentData: boolean;
+  explanation: string | null;
+  lastResetAt: string | null;
+};
+
 export type DashboardData = {
   currentBalance: number;
   upcomingBills: number;
@@ -28,6 +36,7 @@ export type DashboardData = {
   weeklySpending: SpendingPoint[];
   totalWeeklySpend: number;
   transactions: AppTransaction[];
+  demoState?: DemoStateInfo;
 };
 
 export type PolicyGuideline = {
@@ -112,6 +121,7 @@ export const mockPolicyGuidelines: PolicyGuideline[] = [
 ];
 
 const totalWeeklySpend = mockWeeklySpending.reduce((sum, item) => sum + item.spend, 0);
+export const DEMO_SEED_VERSION = "hackathon-baseline-v1";
 
 export const mockDashboardData: DashboardData = {
   currentBalance: 4250,
@@ -121,6 +131,13 @@ export const mockDashboardData: DashboardData = {
   weeklySpending: mockWeeklySpending,
   totalWeeklySpend,
   transactions: mockTransactions,
+  demoState: {
+    baselineBalance: 4250,
+    seedVersion: DEMO_SEED_VERSION,
+    hasPersistentData: false,
+    explanation: null,
+    lastResetAt: null,
+  },
 };
 
 export function createMockDashboardData(): DashboardData {
@@ -132,5 +149,10 @@ export function createMockDashboardData(): DashboardData {
     weeklySpending: mockDashboardData.weeklySpending.map((point) => ({ ...point })),
     totalWeeklySpend: mockDashboardData.totalWeeklySpend,
     transactions: mockDashboardData.transactions.map((transaction) => ({ ...transaction })),
+    demoState: mockDashboardData.demoState
+      ? {
+          ...mockDashboardData.demoState,
+        }
+      : undefined,
   };
 }

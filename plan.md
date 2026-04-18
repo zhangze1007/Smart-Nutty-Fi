@@ -29,9 +29,11 @@ Priority order:
 - Calm Mode returns structured `ruleHits`, `policySummary`, `citations`, and `riskLogId`.
 - Policy grounding uses repo seeds first-class in code, with Firestore `policyDocuments` override support.
 - Frontend reads Firestore first, then `/api/runtime/dashboard`, then static fallback.
+- Missing Firestore demo state is auto-seeded, and a small `/api/demo/reset` path restores the judging baseline on demand.
 - Calm Mode modal now has explicit `Pause for now` and `Continue after review` actions.
+- Calm Mode modal is touch-optimised with a capped height, independent content scrolling, and pinned footer actions for tablet/mobile Chrome.
 - Minimal logging records `risk_triggered`, `risk_confirmed`, and `risk_cancelled`.
-- Home screen includes lightweight Safety & Accessibility controls.
+- Home screen includes lightweight Safety & Accessibility controls plus a demo-state explanation and reset action when persisted transfers are present.
 
 ## Verification
 

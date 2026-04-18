@@ -13,6 +13,7 @@ This hackathon build prioritises the highest-value judging paths:
 - explicit `Pause for now` / `Continue after review` flow
 - minimal logging for `risk_triggered`, `risk_confirmed`, and `risk_cancelled`
 - lightweight Safety & Accessibility controls on the home screen
+- reproducible demo reset path for judging and live demos
 
 ## Core Flow
 
@@ -73,6 +74,7 @@ Main endpoints:
 
 - `GET /api/health`
 - `GET /api/runtime/dashboard`
+- `POST /api/demo/reset`
 - `POST /api/assistant`
 - `POST /api/actions/confirm-transfer`
 - `POST /api/actions/cancel-transfer`
@@ -85,6 +87,8 @@ Main endpoints:
 - risk config source
 
 `/api/runtime/dashboard` keeps the demo coherent when frontend Firestore reads are unavailable, so the UI can still read server runtime state instead of falling back immediately to static mock data.
+
+`POST /api/demo/reset` restores the seeded RM4250.00 hackathon baseline, rewrites demo transactions, and clears transient risk logs so the judging flow starts from a clean state.
 
 ## Data & Logging
 
@@ -102,7 +106,9 @@ Risk logs written by the server:
 - `risk_confirmed`
 - `risk_cancelled`
 
-If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
+If Firestore is available but `appState/demo` is missing, the server seeds a reproducible baseline automatically. If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
+
+When previous demo transfers are still present, the home screen shows a demo-state explanation and a reset action so judges do not mistake persisted data for a broken balance.
 
 ## Environment Variables
 
@@ -184,6 +190,7 @@ The current essential tests cover:
 - structured risk rule hits
 - repo-seeded policy fallback and Firestore override
 - runtime dashboard fallback when Firestore reads fail
+- demo reset restores the seeded baseline and flags stale persisted demo data
 
 ## Demo Script
 
@@ -194,7 +201,8 @@ The current essential tests cover:
 5. Click `Pause for now` to show that no money moves and the decision is logged.
 6. Retry the transfer and click `Continue after review`.
 7. Show the successful transfer response.
-8. Call `/api/health` to show runtime status and configuration source.
+8. If the home balance reflects older demo activity, tap `Reset demo` to return to the seeded baseline.
+9. Call `/api/health` to show runtime status and configuration source.
 
 ## Cloud Run Deployment
 
@@ -215,6 +223,7 @@ gcloud run deploy nutty-fi \
 Cloud Run validation after deploy:
 
 - `GET /api/health`
+- `POST /api/demo/reset`
 - safe transfer path
 - risky transfer path
 - pause flow

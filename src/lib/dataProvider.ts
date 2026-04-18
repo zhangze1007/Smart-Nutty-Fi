@@ -4,6 +4,7 @@ import {
   createMockDashboardData,
   type AppTransaction,
   type DashboardData,
+  type DemoStateInfo,
   type SpendingPoint,
 } from "@/data/mockTransactions";
 import { getFirebaseDb } from "@/lib/firebase";
@@ -61,6 +62,88 @@ function sortTransactions(transactions: AppTransaction[]) {
   return [...transactions].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
+function createDemoStateExplanation(baselineBalance: number) {
+  return `This demo instance includes previous persisted transfers. Reset to return to the clean RM ${baselineBalance.toFixed(2)} judging baseline.`;
+}
+
+function arraysMatch(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
+function createTransactionSignature(transaction: Pick<AppTransaction, "id" | "title" | "amount" | "createdAt">) {
+  return [transaction.id, transaction.title, transaction.amount.toString(), transaction.createdAt].join("|");
+}
+
+function hasSeedTransactionDrift(transactions: AppTransaction[], fallback: DashboardData) {
+  if (!transactions.length) {
+    return false;
+  }
+
+  if (transactions.length !== fallback.transactions.length) {
+    return true;
+  }
+
+  const fallbackSignatures = fallback.transactions.map(createTransactionSignature).sort();
+  const transactionSignatures = transactions.map(createTransactionSignature).sort();
+
+  return transactionSignatures.some((signature, index) => signature !== fallbackSignatures[index]);
+}
+
+function normalizeDemoState(
+  record: Record<string, unknown>,
+  fallback: DashboardData,
+  transactions: AppTransaction[],
+): DemoStateInfo {
+  const fallbackState = fallback.demoState ?? {
+    baselineBalance: fallback.currentBalance,
+    seedVersion: "hackathon-baseline-v1",
+    hasPersistentData: false,
+    explanation: null,
+    lastResetAt: null,
+  };
+
+  const baselineBalance =
+    typeof record.demoSeedBalance === "number"
+      ? record.demoSeedBalance
+      : fallbackState.baselineBalance;
+  const derivedPersistentState =
+    typeof record.currentBalance === "number"
+      ? record.currentBalance !== baselineBalance ||
+        !arraysMatch(
+          Array.isArray(record.knownPayees)
+            ? record.knownPayees.filter((payee): payee is string => typeof payee === "string")
+            : fallback.knownPayees,
+          fallback.knownPayees,
+        ) ||
+        hasSeedTransactionDrift(transactions, fallback)
+      : hasSeedTransactionDrift(transactions, fallback);
+  const hasPersistentData =
+    typeof record.hasPersistentDemoData === "boolean"
+      ? record.hasPersistentDemoData
+      : derivedPersistentState;
+
+  return {
+    baselineBalance,
+    seedVersion:
+      typeof record.demoSeedVersion === "string" ? record.demoSeedVersion : fallbackState.seedVersion,
+    hasPersistentData,
+    explanation:
+      hasPersistentData
+        ? typeof record.demoStateMessage === "string" && record.demoStateMessage.trim().length
+          ? record.demoStateMessage
+          : createDemoStateExplanation(baselineBalance)
+        : null,
+    lastResetAt: typeof record.lastResetAt === "string" ? record.lastResetAt : fallbackState.lastResetAt,
+  };
+}
+
 function createFallbackDashboard() {
   return createMockDashboardData();
 }
@@ -70,6 +153,18 @@ async function fetchRuntimeDashboard() {
 
   if (!response.ok) {
     throw new Error("Runtime dashboard request failed.");
+  }
+
+  return (await response.json()) as DashboardData;
+}
+
+export async function resetDemoData() {
+  const response = await fetch("/api/demo/reset", {
+    method: "POST",
+  });
+
+  if (!response.ok) {
+    throw new Error("Demo reset request failed.");
   }
 
   return (await response.json()) as DashboardData;
@@ -117,6 +212,7 @@ export async function getDashboardData(): Promise<DashboardData> {
             ? weeklySpending.reduce((sum, point) => sum + point.spend, 0)
             : fallback.totalWeeklySpend,
           transactions: transactions.length ? transactions : fallback.transactions,
+          demoState: normalizeDemoState(state as Record<string, unknown>, fallback, transactions),
         };
       }
     } catch {

@@ -7,7 +7,7 @@ import express from "express";
 
 import { loadRiskConfig } from "./config/riskConfig.js";
 import { assistantFlow, cancelTransfer, confirmTransfer, getBackendStatus } from "./nutty.js";
-import { getAccountSnapshot, getDashboardSnapshot, loadPolicyDocuments } from "./lib/store.js";
+import { getAccountSnapshot, getDashboardSnapshot, loadPolicyDocuments, resetDemoState } from "./lib/store.js";
 
 const app = express();
 const port = Number(process.env.PORT ?? 8080);
@@ -31,6 +31,17 @@ app.get("/api/runtime/dashboard", async (_request, response) => {
   } catch (error) {
     response.status(500).json({
       message: error instanceof Error ? error.message : "Nutty could not load the runtime dashboard.",
+    });
+  }
+});
+
+app.post("/api/demo/reset", async (_request, response) => {
+  try {
+    const dashboard = await resetDemoState();
+    response.json(dashboard);
+  } catch (error) {
+    response.status(500).json({
+      message: error instanceof Error ? error.message : "Nutty could not reset the demo state.",
     });
   }
 });

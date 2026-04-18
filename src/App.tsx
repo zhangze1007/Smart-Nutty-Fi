@@ -93,6 +93,31 @@ export default function App() {
     }
   }, [textScale]);
 
+  useEffect(() => {
+    if (typeof document === "undefined") {
+      return undefined;
+    }
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalBodyOverscroll = document.body.style.overscrollBehavior;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    const originalHtmlOverscroll = document.documentElement.style.overscrollBehavior;
+
+    if (isRiskModalOpen) {
+      document.body.style.overflow = "hidden";
+      document.body.style.overscrollBehavior = "none";
+      document.documentElement.style.overflow = "hidden";
+      document.documentElement.style.overscrollBehavior = "none";
+    }
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.body.style.overscrollBehavior = originalBodyOverscroll;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      document.documentElement.style.overscrollBehavior = originalHtmlOverscroll;
+    };
+  }, [isRiskModalOpen]);
+
   const triggerRiskIntervention = (nextRiskData: RiskPrompt) => {
     setRiskData(nextRiskData);
     setIsRiskModalOpen(true);
@@ -190,7 +215,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-nutty-bg font-sans text-nutty-text-main">
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className={cn("flex-1 pb-24", isRiskModalOpen ? "overflow-hidden" : "overflow-y-auto")}>
         <div className="relative mx-auto h-full w-full max-w-md bg-nutty-card shadow-sm sm:border-x sm:border-nutty-border">
           {currentView === "home" && (
             <HomeView
@@ -236,77 +261,97 @@ export default function App() {
       </div>
 
       {isRiskModalOpen && riskData && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#2D1606]/75 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[2rem] border border-[#D97706]/30 bg-[#FFF7ED] p-6 shadow-2xl">
-            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#F97316] text-white shadow-lg">
-              <ShieldAlert className="h-8 w-8" />
-            </div>
-            <div className="mb-6 text-center">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#C2410C]">
-                Calm Mode
-              </p>
-              <h2 className="mb-2 text-2xl font-bold text-[#7C2D12]">Pause before sending.</h2>
-              <p className="text-sm text-[#9A3412]">
-                Nutty paused{" "}
-                <span className="font-semibold">RM{riskData.amount.toFixed(2)}</span> to{" "}
-                <span className="font-semibold">{riskData.recipient}</span> under the{" "}
-                <span className="font-semibold">{getRiskProfileLabel(riskData.appliedProfile)}</span>{" "}
-                profile.
-              </p>
-            </div>
+        <div className="fixed inset-0 z-[100] flex items-end justify-center overscroll-none bg-[#2D1606]/75 p-3 backdrop-blur-sm sm:items-center sm:p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="calm-mode-title"
+            className="flex w-full max-w-md flex-col overflow-hidden rounded-[2rem] border border-[#D97706]/30 bg-[#FFF7ED] shadow-2xl"
+            style={{ maxHeight: "90dvh" }}
+          >
+            <div
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6 pt-6 touch-pan-y"
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#F97316] text-white shadow-lg">
+                <ShieldAlert className="h-8 w-8" />
+              </div>
+              <div className="mb-6 text-center">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#C2410C]">
+                  Calm Mode
+                </p>
+                <h2 id="calm-mode-title" className="mb-2 text-2xl font-bold text-[#7C2D12]">
+                  Pause before sending.
+                </h2>
+                <p className="text-sm text-[#9A3412]">
+                  Nutty paused{" "}
+                  <span className="font-semibold">RM{riskData.amount.toFixed(2)}</span> to{" "}
+                  <span className="font-semibold">{riskData.recipient}</span> under the{" "}
+                  <span className="font-semibold">
+                    {getRiskProfileLabel(riskData.appliedProfile)}
+                  </span>{" "}
+                  profile.
+                </p>
+              </div>
 
-            <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/80 p-4">
-              <p className="mb-3 text-sm font-semibold text-[#9A3412]">Why Nutty intervened</p>
-              <div className="flex flex-col gap-3">
-                {riskData.ruleHits.map((ruleHit) => (
-                  <div key={ruleHit.code} className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-3">
-                    <div className="mb-1 flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-[#7C2D12]">{ruleHit.title}</p>
-                      <span className="rounded-full bg-[#FFEDD5] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#C2410C]">
-                        {ruleHit.severity}
-                      </span>
+              <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/80 p-4">
+                <p className="mb-3 text-sm font-semibold text-[#9A3412]">Why Nutty intervened</p>
+                <div className="flex flex-col gap-3">
+                  {riskData.ruleHits.map((ruleHit) => (
+                    <div
+                      key={ruleHit.code}
+                      className="rounded-xl border border-[#FED7AA] bg-[#FFF7ED] p-3"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#7C2D12]">{ruleHit.title}</p>
+                        <span className="rounded-full bg-[#FFEDD5] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#C2410C]">
+                          {ruleHit.severity}
+                        </span>
+                      </div>
+                      <p className="text-sm text-[#9A3412]">{ruleHit.detail}</p>
                     </div>
-                    <p className="text-sm text-[#9A3412]">{ruleHit.detail}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#FED7AA] bg-white/80 p-4">
+                <p className="mb-2 text-sm font-semibold text-[#9A3412]">Policy context</p>
+                <p className="mb-3 text-sm text-[#7C2D12]">{riskData.policySummary}</p>
+                <div className="flex flex-col gap-2">
+                  {riskData.citations.map((citation) => (
+                    <a
+                      key={citation.url}
+                      href={citation.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="flex items-center justify-between rounded-xl border border-[#FED7AA] bg-[#FFF7ED] px-3 py-2 text-left text-xs font-medium text-[#9A3412] transition-colors hover:bg-[#FFEDD5]"
+                    >
+                      <span>{citation.title}</span>
+                      <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                    </a>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <div className="mb-6 rounded-2xl border border-[#FED7AA] bg-white/80 p-4">
-              <p className="mb-2 text-sm font-semibold text-[#9A3412]">Policy context</p>
-              <p className="mb-3 text-sm text-[#7C2D12]">{riskData.policySummary}</p>
-              <div className="flex flex-col gap-2">
-                {riskData.citations.map((citation) => (
-                  <a
-                    key={citation.url}
-                    href={citation.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-xl border border-[#FED7AA] bg-[#FFF7ED] px-3 py-2 text-left text-xs font-medium text-[#9A3412] transition-colors hover:bg-[#FFEDD5]"
-                  >
-                    <span>{citation.title}</span>
-                    <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                  </a>
-                ))}
+            <div className="sticky bottom-0 shrink-0 border-t border-[#FED7AA] bg-[#FFF7ED] px-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-12px_24px_rgba(124,45,18,0.08)]">
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={cancelRiskyTransfer}
+                  disabled={isCancellingRisk || isConfirmingRisk}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#FDBA74] bg-white font-medium text-[#9A3412] transition-colors hover:bg-[#FFF1E6] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <PauseCircle className="h-4 w-4" />
+                  {isCancellingRisk ? "Pausing..." : "Pause for now"}
+                </button>
+                <button
+                  onClick={confirmRiskyTransfer}
+                  disabled={isConfirmingRisk || isCancellingRisk}
+                  className="h-14 w-full rounded-2xl bg-[#9A3412] font-medium text-white transition-colors hover:bg-[#7C2D12] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isConfirmingRisk ? "Confirming transfer..." : "Continue after review"}
+                </button>
               </div>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={cancelRiskyTransfer}
-                disabled={isCancellingRisk || isConfirmingRisk}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#FDBA74] bg-white font-medium text-[#9A3412] transition-colors hover:bg-[#FFF1E6] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                <PauseCircle className="h-4 w-4" />
-                {isCancellingRisk ? "Pausing..." : "Pause for now"}
-              </button>
-              <button
-                onClick={confirmRiskyTransfer}
-                disabled={isConfirmingRisk || isCancellingRisk}
-                className="h-14 w-full rounded-2xl bg-[#9A3412] font-medium text-white transition-colors hover:bg-[#7C2D12] disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isConfirmingRisk ? "Confirming transfer..." : "Continue after review"}
-              </button>
             </div>
           </div>
         </div>

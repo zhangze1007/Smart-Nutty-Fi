@@ -3,10 +3,14 @@ import { randomUUID } from "node:crypto";
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 
 import {
+  DEMO_SEED_VERSION,
   createMockDashboardData,
   type AppTransaction,
   type DashboardData,
+  type DemoStateInfo,
   type SpendingPoint,
+  mockDashboardData,
+  mockTransactions,
 } from "../../src/data/mockTransactions.js";
 import { policySeedDocuments, type PolicyDocument } from "../data/policySeeds.js";
 import type { RiskProfileId } from "../config/riskConfig.js";
@@ -52,8 +56,10 @@ type PolicySearchResult = {
   source: PolicyDataSource;
 };
 
+const DEMO_STATE_DOCUMENT_PATH = "appState/demo";
+
 const memoryState = {
-  dashboard: createMockDashboardData(),
+  dashboard: createSeedDashboardData(),
   logs: [] as RiskLogEntry[],
   simulations: [] as SimulationEvent[],
 };
@@ -70,6 +76,141 @@ function createDateLabel(date: Date) {
 
 function setRuntimeDataMode(mode: RuntimeDataMode) {
   latestRuntimeDataMode = mode;
+}
+
+function createDemoStateExplanation(baselineBalance: number) {
+  return `This demo instance includes previous persisted transfers. Reset to return to the clean RM ${baselineBalance.toFixed(2)} judging baseline.`;
+}
+
+function createSeedDashboardData(lastResetAt: string | null = null): DashboardData {
+  const dashboard = createMockDashboardData();
+
+  return {
+    ...dashboard,
+    demoState: {
+      baselineBalance: dashboard.demoState?.baselineBalance ?? mockDashboardData.currentBalance,
+      seedVersion: dashboard.demoState?.seedVersion ?? DEMO_SEED_VERSION,
+      hasPersistentData: false,
+      explanation: null,
+      lastResetAt,
+    },
+  };
+}
+
+function createPersistentDemoState(previousState?: DemoStateInfo): DemoStateInfo {
+  const baselineBalance = previousState?.baselineBalance ?? mockDashboardData.currentBalance;
+
+  return {
+    baselineBalance,
+    seedVersion: previousState?.seedVersion ?? DEMO_SEED_VERSION,
+    hasPersistentData: true,
+    explanation: createDemoStateExplanation(baselineBalance),
+    lastResetAt: previousState?.lastResetAt ?? null,
+  };
+}
+
+function arraysMatch(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+
+  return sortedLeft.every((value, index) => value === sortedRight[index]);
+}
+
+function createTransactionSignature(transaction: Pick<AppTransaction, "id" | "title" | "amount" | "createdAt">) {
+  return [transaction.id, transaction.title, transaction.amount.toString(), transaction.createdAt].join("|");
+}
+
+function hasSeedTransactionDrift(transactions: AppTransaction[]) {
+  if (!transactions.length) {
+    return false;
+  }
+
+  if (transactions.length !== mockTransactions.length) {
+    return true;
+  }
+
+  const seedSignatures = mockTransactions.map(createTransactionSignature).sort();
+  const transactionSignatures = transactions.map(createTransactionSignature).sort();
+
+  return transactionSignatures.some((signature, index) => signature !== seedSignatures[index]);
+}
+
+function normalizeDemoState(
+  record: Record<string, unknown>,
+  fallback: DashboardData,
+  transactions: AppTransaction[],
+): DemoStateInfo {
+  const fallbackState = fallback.demoState ?? {
+    baselineBalance: fallback.currentBalance,
+    seedVersion: DEMO_SEED_VERSION,
+    hasPersistentData: false,
+    explanation: null,
+    lastResetAt: null,
+  };
+
+  const baselineBalance =
+    typeof record.demoSeedBalance === "number"
+      ? record.demoSeedBalance
+      : fallbackState.baselineBalance;
+  const seedVersion =
+    typeof record.demoSeedVersion === "string" ? record.demoSeedVersion : fallbackState.seedVersion;
+  const derivedPersistentState =
+    typeof record.currentBalance === "number"
+      ? record.currentBalance !== baselineBalance ||
+        !arraysMatch(
+          Array.isArray(record.knownPayees)
+            ? record.knownPayees.filter((payee): payee is string => typeof payee === "string")
+            : fallback.knownPayees,
+          fallback.knownPayees,
+        ) ||
+        hasSeedTransactionDrift(transactions)
+      : hasSeedTransactionDrift(transactions);
+  const hasPersistentData =
+    typeof record.hasPersistentDemoData === "boolean"
+      ? record.hasPersistentDemoData
+      : derivedPersistentState;
+
+  return {
+    baselineBalance,
+    seedVersion,
+    hasPersistentData,
+    explanation:
+      hasPersistentData
+        ? typeof record.demoStateMessage === "string" && record.demoStateMessage.trim().length
+          ? record.demoStateMessage
+          : createDemoStateExplanation(baselineBalance)
+        : null,
+    lastResetAt: typeof record.lastResetAt === "string" ? record.lastResetAt : fallbackState.lastResetAt,
+  };
+}
+
+function createDashboardStateDocument(dashboard: DashboardData) {
+  const demoState = dashboard.demoState ?? {
+    baselineBalance: mockDashboardData.currentBalance,
+    seedVersion: DEMO_SEED_VERSION,
+    hasPersistentData: false,
+    explanation: null,
+    lastResetAt: null,
+  };
+
+  return {
+    currentBalance: dashboard.currentBalance,
+    upcomingBills: dashboard.upcomingBills,
+    knownPayees: dashboard.knownPayees,
+    periodLabel: dashboard.periodLabel,
+    weeklySpending: dashboard.weeklySpending,
+    totalWeeklySpend: dashboard.totalWeeklySpend,
+    demoSeedVersion: demoState.seedVersion,
+    demoSeedBalance: demoState.baselineBalance,
+    hasPersistentDemoData: demoState.hasPersistentData,
+    demoStateMessage: demoState.explanation,
+    lastResetAt: demoState.lastResetAt,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
 }
 
 function normalizeSpendingPoint(value: unknown): SpendingPoint | null {
@@ -237,14 +378,14 @@ export async function getAccountSnapshot(options?: { db?: Firestore | null }) {
   }
 
   try {
-    const snapshot = await db.doc("appState/demo").get();
+    const snapshot = await db.doc(DEMO_STATE_DOCUMENT_PATH).get();
 
     if (!snapshot.exists) {
-      setRuntimeDataMode("memory");
+      const seededDashboard = await resetDemoState({ db });
       return {
-        currentBalance: memoryState.dashboard.currentBalance,
-        upcomingBills: memoryState.dashboard.upcomingBills,
-        knownPayees: [...memoryState.dashboard.knownPayees],
+        currentBalance: seededDashboard.currentBalance,
+        upcomingBills: seededDashboard.upcomingBills,
+        knownPayees: [...seededDashboard.knownPayees],
       };
     }
 
@@ -271,13 +412,12 @@ export async function getDashboardSnapshot(options?: { db?: Firestore | null }):
 
   try {
     const [stateSnapshot, transactionsSnapshot] = await Promise.all([
-      db.doc("appState/demo").get(),
+      db.doc(DEMO_STATE_DOCUMENT_PATH).get(),
       db.collection("transactions").get(),
     ]);
 
     if (!stateSnapshot.exists) {
-      setRuntimeDataMode("memory");
-      return createMockDashboardDataFromMemory();
+      return resetDemoState({ db });
     }
 
     const state = stateSnapshot.data() ?? {};
@@ -303,6 +443,7 @@ export async function getDashboardSnapshot(options?: { db?: Firestore | null }):
         ? weeklySpending.reduce((sum, point) => sum + point.spend, 0)
         : fallback.totalWeeklySpend,
       transactions: transactions.length ? transactions : fallback.transactions,
+      demoState: normalizeDemoState(state, fallback, transactions),
     };
   } catch {
     setRuntimeDataMode("memory");
@@ -319,7 +460,63 @@ function createMockDashboardDataFromMemory(): DashboardData {
     weeklySpending: memoryState.dashboard.weeklySpending.map((point) => ({ ...point })),
     totalWeeklySpend: memoryState.dashboard.totalWeeklySpend,
     transactions: memoryState.dashboard.transactions.map((transaction) => ({ ...transaction })),
+    demoState: memoryState.dashboard.demoState
+      ? {
+          ...memoryState.dashboard.demoState,
+        }
+      : undefined,
   };
+}
+
+export async function resetDemoState(options?: { db?: Firestore | null }): Promise<DashboardData> {
+  const db = options && "db" in options ? options.db ?? null : getAdminFirestore();
+  const resetAt = new Date().toISOString();
+  const nextDashboard = createSeedDashboardData(resetAt);
+
+  memoryState.dashboard = nextDashboard;
+  memoryState.logs = [];
+  memoryState.simulations = [];
+
+  if (!db) {
+    setRuntimeDataMode("memory");
+    return createMockDashboardDataFromMemory();
+  }
+
+  try {
+    const [transactionsSnapshot, logsSnapshot, simulationsSnapshot] = await Promise.all([
+      db.collection("transactions").get(),
+      db.collection("logs").get(),
+      db.collection("simulations").get(),
+    ]);
+
+    const batch = db.batch();
+
+    transactionsSnapshot.docs.forEach((document) => {
+      batch.delete(document.ref);
+    });
+    logsSnapshot.docs.forEach((document) => {
+      batch.delete(document.ref);
+    });
+    simulationsSnapshot.docs.forEach((document) => {
+      batch.delete(document.ref);
+    });
+
+    mockTransactions.forEach((transaction) => {
+      batch.set(db.collection("transactions").doc(transaction.id), {
+        ...transaction,
+        status: transaction.status ?? "completed",
+      });
+    });
+
+    batch.set(db.doc(DEMO_STATE_DOCUMENT_PATH), createDashboardStateDocument(nextDashboard));
+
+    await batch.commit();
+    setRuntimeDataMode("firestore");
+  } catch {
+    setRuntimeDataMode("memory");
+  }
+
+  return createMockDashboardDataFromMemory();
 }
 
 export async function recordRiskLog(
@@ -378,8 +575,9 @@ export async function saveTransfer(input: {
   amount: number;
   reasons: string[];
   acknowledgedRisk: boolean;
-}) {
-  const baseSnapshot = await getAccountSnapshot();
+}, options?: { db?: Firestore | null }) {
+  const db = options && "db" in options ? options.db ?? null : getAdminFirestore();
+  const baseSnapshot = await getAccountSnapshot({ db });
   const createdAt = new Date();
   const nextBalance = baseSnapshot.currentBalance - input.amount;
   const nextKnownPayees = Array.from(new Set([...baseSnapshot.knownPayees, input.recipient]));
@@ -397,11 +595,14 @@ export async function saveTransfer(input: {
     status: input.acknowledgedRisk ? "reviewed" : "completed",
   };
 
-  memoryState.dashboard.currentBalance = nextBalance;
-  memoryState.dashboard.knownPayees = nextKnownPayees;
-  memoryState.dashboard.transactions = [transaction, ...memoryState.dashboard.transactions].slice(0, 20);
+  memoryState.dashboard = {
+    ...memoryState.dashboard,
+    currentBalance: nextBalance,
+    knownPayees: nextKnownPayees,
+    transactions: [transaction, ...memoryState.dashboard.transactions].slice(0, 20),
+    demoState: createPersistentDemoState(memoryState.dashboard.demoState),
+  };
 
-  const db = getAdminFirestore();
   if (db) {
     try {
       await db.collection("transactions").doc(transaction.id).set({
@@ -410,18 +611,9 @@ export async function saveTransfer(input: {
         reasons: input.reasons,
       });
 
-      await db.doc("appState/demo").set(
-        {
-          currentBalance: nextBalance,
-          upcomingBills: baseSnapshot.upcomingBills,
-          knownPayees: nextKnownPayees,
-          periodLabel: memoryState.dashboard.periodLabel,
-          weeklySpending: memoryState.dashboard.weeklySpending,
-          totalWeeklySpend: memoryState.dashboard.totalWeeklySpend,
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await db.doc(DEMO_STATE_DOCUMENT_PATH).set(createDashboardStateDocument(memoryState.dashboard), {
+        merge: true,
+      });
 
       setRuntimeDataMode("firestore");
     } catch {
