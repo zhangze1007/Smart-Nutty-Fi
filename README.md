@@ -229,6 +229,19 @@ Cloud Run validation after deploy:
 - pause flow
 - continue flow
 
+## AI Tooling Disclosure
+
+The primary development tools for this project were Google AI Studio and Google Antigravity. The final prototype is deployed on Google Cloud Run.
+
+The live AI integration in the application uses Google's Gemini model through Genkit. All final implementation decisions, architecture choices, and submission materials were reviewed and understood by the team.
+
+The team is able to explain and defend the final codebase during judging.
+
+## Development & Deployment Evidence
+
+- The final prototype is deployed on Google Cloud Run.
+- The video demo will show the codebase and the deployed application.
+
 ## Notes
 
 - Gemini is optional for local development. Without `GEMINI_API_KEY`, the backend falls back to deterministic intent parsing.
