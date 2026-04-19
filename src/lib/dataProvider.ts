@@ -8,6 +8,7 @@ import {
   type SpendingPoint,
 } from "@/data/mockTransactions";
 import { getFirebaseDb } from "@/lib/firebase";
+import type { PolicyContextData } from "@/lib/types";
 
 function normalizeSpendingPoint(value: unknown): SpendingPoint | null {
   if (!value || typeof value !== "object") {
@@ -158,6 +159,16 @@ async function fetchRuntimeDashboard() {
   return (await response.json()) as DashboardData;
 }
 
+async function fetchRuntimePolicyContext() {
+  const response = await fetch("/api/runtime/policy-context");
+
+  if (!response.ok) {
+    throw new Error("Runtime policy context request failed.");
+  }
+
+  return (await response.json()) as PolicyContextData;
+}
+
 export async function resetDemoData() {
   const response = await fetch("/api/demo/reset", {
     method: "POST",
@@ -236,4 +247,8 @@ export async function getTransactionsData() {
     totalWeeklySpend: dashboard.totalWeeklySpend,
     periodLabel: dashboard.periodLabel,
   };
+}
+
+export async function getPolicyContextData() {
+  return fetchRuntimePolicyContext();
 }

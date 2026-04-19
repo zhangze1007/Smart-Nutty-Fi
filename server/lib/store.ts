@@ -14,7 +14,7 @@ import {
 } from "../../src/data/mockTransactions.js";
 import { policySeedDocuments, type PolicyDocument } from "../data/policySeeds.js";
 import type { RiskProfileId } from "../config/riskConfig.js";
-import type { RiskRuleCode } from "./risk.js";
+import { isRiskRuleCode, type RiskRuleCode, type RiskRuleHit } from "./risk.js";
 import { getAdminFirestore } from "./firebaseAdmin.js";
 
 export type RuntimeDataMode = "firestore" | "memory";
@@ -39,6 +39,9 @@ type RiskLogEntry = {
   createdAt: string;
   relatedRiskLogId?: string;
   message?: string;
+  ruleHits?: RiskRuleHit[];
+  policySummary?: string;
+  citations?: PolicyCitation[];
 };
 
 type SimulationEvent = {
@@ -54,6 +57,29 @@ type PolicySearchResult = {
   summary: string;
   citations: PolicyCitation[];
   source: PolicyDataSource;
+};
+
+export type PolicyContextSnapshot = {
+  source: PolicyDataSource;
+  documents: Array<{
+    id: string;
+    title: string;
+    source: string;
+    sourceUrl: string;
+    jurisdiction: string;
+    summary: string;
+    topics: string[];
+  }>;
+  latestTriggeredReview: null | {
+    id: string;
+    recipient: string;
+    amount: number;
+    riskProfile: RiskProfileId;
+    createdAt: string;
+    ruleHits: RiskRuleHit[];
+    policySummary: string;
+    citations: PolicyCitation[];
+  };
 };
 
 const DEMO_STATE_DOCUMENT_PATH = "appState/demo";
@@ -323,6 +349,153 @@ function normalizePolicyDocument(value: unknown): PolicyDocument | null {
     excerpt: record.excerpt,
     topics: record.topics.filter((topic): topic is string => typeof topic === "string"),
     keywords: record.keywords.filter((keyword): keyword is string => typeof keyword === "string"),
+  };
+}
+
+function normalizePolicyCitation(value: unknown): PolicyCitation | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.title !== "string" ||
+    typeof record.source !== "string" ||
+    typeof record.url !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    title: record.title,
+    source: record.source,
+    url: record.url,
+  };
+}
+
+function normalizeRiskRuleHit(value: unknown): RiskRuleHit | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.code !== "string" ||
+    !isRiskRuleCode(record.code) ||
+    typeof record.title !== "string" ||
+    typeof record.detail !== "string" ||
+    (record.severity !== "medium" && record.severity !== "high") ||
+    !Array.isArray(record.policyTopics) ||
+    !record.policyTopics.every((topic) => typeof topic === "string")
+  ) {
+    return null;
+  }
+
+  return {
+    code: record.code,
+    title: record.title,
+    detail: record.detail,
+    severity: record.severity,
+    policyTopics: record.policyTopics,
+  };
+}
+
+function normalizeRiskLog(id: string, value: unknown): RiskLogEntry | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const eventType =
+    record.eventType === "risk_triggered" ||
+    record.eventType === "risk_confirmed" ||
+    record.eventType === "risk_cancelled"
+      ? record.eventType
+      : null;
+  const riskProfile =
+    record.riskProfile === "conservative" ||
+    record.riskProfile === "balanced" ||
+    record.riskProfile === "flexible"
+      ? record.riskProfile
+      : null;
+
+  if (
+    !eventType ||
+    !riskProfile ||
+    typeof record.recipient !== "string" ||
+    typeof record.amount !== "number" ||
+    !Array.isArray(record.ruleCodes) ||
+    !record.ruleCodes.every((code) => typeof code === "string") ||
+    typeof record.createdAt !== "string"
+  ) {
+    return null;
+  }
+
+  return {
+    id,
+    eventType,
+    recipient: record.recipient,
+    amount: record.amount,
+    ruleCodes: record.ruleCodes.filter((code): code is RiskRuleCode => isRiskRuleCode(code)),
+    riskProfile,
+    createdAt: record.createdAt,
+    relatedRiskLogId:
+      typeof record.relatedRiskLogId === "string" ? record.relatedRiskLogId : undefined,
+    message: typeof record.message === "string" ? record.message : undefined,
+    ruleHits: Array.isArray(record.ruleHits)
+      ? record.ruleHits
+          .map((ruleHit: unknown) => normalizeRiskRuleHit(ruleHit))
+          .filter((ruleHit): ruleHit is RiskRuleHit => ruleHit !== null)
+      : undefined,
+    policySummary: typeof record.policySummary === "string" ? record.policySummary : undefined,
+    citations: Array.isArray(record.citations)
+      ? record.citations
+          .map((citation: unknown) => normalizePolicyCitation(citation))
+          .filter((citation): citation is PolicyCitation => citation !== null)
+      : undefined,
+  };
+}
+
+function findLatestTriggeredReview(logs: RiskLogEntry[]) {
+  return [...logs]
+    .filter(
+      (log) =>
+        log.eventType === "risk_triggered" &&
+        log.ruleHits?.length &&
+        log.policySummary &&
+        log.citations?.length,
+    )
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
+}
+
+function createPolicyContextSnapshot(
+  documents: PolicyDocument[],
+  source: PolicyDataSource,
+  latestTriggeredReview: RiskLogEntry | null,
+): PolicyContextSnapshot {
+  return {
+    source,
+    documents: documents.map((document) => ({
+      id: document.id,
+      title: document.title,
+      source: document.source,
+      sourceUrl: document.sourceUrl,
+      jurisdiction: document.jurisdiction,
+      summary: document.summary,
+      topics: [...document.topics],
+    })),
+    latestTriggeredReview: latestTriggeredReview
+      ? {
+          id: latestTriggeredReview.id,
+          recipient: latestTriggeredReview.recipient,
+          amount: latestTriggeredReview.amount,
+          riskProfile: latestTriggeredReview.riskProfile,
+          createdAt: latestTriggeredReview.createdAt,
+          ruleHits: latestTriggeredReview.ruleHits ?? [],
+          policySummary: latestTriggeredReview.policySummary ?? "",
+          citations: latestTriggeredReview.citations ?? [],
+        }
+      : null,
   };
 }
 
@@ -669,6 +842,29 @@ export async function getPolicySearchResult(input: { query: string; topics?: str
     citations: matchedDocuments.map(createPolicyCitation),
     source,
   };
+}
+
+export async function getPolicyContextSnapshot(options?: {
+  db?: Firestore | null;
+}): Promise<PolicyContextSnapshot> {
+  const db = options && "db" in options ? options.db ?? null : getAdminFirestore();
+  const { documents, source } = await loadPolicyDocuments({ db });
+
+  if (!db) {
+    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(memoryState.logs));
+  }
+
+  try {
+    const snapshot = await db.collection("logs").get();
+    const logs = snapshot.docs
+      .map((document) => normalizeRiskLog(document.id, document.data()))
+      .filter((log): log is RiskLogEntry => log !== null);
+
+    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(logs));
+  } catch {
+    setRuntimeDataMode("memory");
+    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(memoryState.logs));
+  }
 }
 
 export function getRuntimeDataMode() {

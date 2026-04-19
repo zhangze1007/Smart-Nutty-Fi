@@ -63,3 +63,28 @@ export type RiskPrompt = {
   riskLogId: string | null;
   appliedProfile: RiskProfileId;
 };
+
+export type PolicyDocumentSummary = {
+  id: string;
+  title: string;
+  source: string;
+  sourceUrl: string;
+  jurisdiction: string;
+  summary: string;
+  topics: string[];
+};
+
+export type PolicyContextData = {
+  source: "firestore" | "seed";
+  documents: PolicyDocumentSummary[];
+  latestTriggeredReview: null | {
+    id: string;
+    recipient: string;
+    amount: number;
+    riskProfile: RiskProfileId;
+    createdAt: string;
+    ruleHits: RiskRuleHit[];
+    policySummary: string;
+    citations: PolicyCitation[];
+  };
+};

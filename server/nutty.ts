@@ -650,6 +650,9 @@ export const assistantFlow = ai.defineFlow(
           ruleCodes: riskCheck.result.ruleHits.map((ruleHit) => ruleHit.code),
           riskProfile: riskCheck.result.appliedProfile,
           message: reply,
+          ruleHits: riskCheck.result.ruleHits,
+          policySummary: policySearch.result.summary,
+          citations: policySearch.result.citations,
         });
 
         return {
