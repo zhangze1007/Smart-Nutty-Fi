@@ -47,6 +47,16 @@ Required checks:
 - Pause flow -> no transfer executed
 - Continue flow -> transfer executed
 
+## Adoption Framing
+
+Keep the business story practical and tied to the shipped MVP:
+
+- present Nutty-Fi as a safety layer for risky transfers inside an existing wallet or banking flow
+- describe sandbox or banking integration as a next-step connection point, not current functionality
+- treat premium coaching as a possible monetization layer built on top of stricter profiles and review history
+- treat analytics as a future summary of intervention outcomes, not a claim of full fraud intelligence
+- avoid platform-language that implies Nutty-Fi replaces settlement, compliance systems, or fraud teams
+
 ## Deferred For Later
 
 - runtime analytics API beyond essential dashboard fallback

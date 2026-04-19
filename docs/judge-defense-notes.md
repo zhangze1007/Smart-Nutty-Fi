@@ -58,6 +58,17 @@ Firestore is the preferred runtime store for the MVP. It keeps:
 
 If Firestore is unavailable, the app falls back to in-memory demo state so the prototype still works during judging.
 
+## Realistic adoption path
+
+The believable rollout path is not "replace a bank." It is:
+
+- e-wallet safety layer: insert Calm Mode before final confirmation for higher-risk transfers
+- banking or sandbox path: connect the checkpoint to sandbox payment APIs, payee verification, or transaction metadata without taking over settlement
+- premium safety layer: offer stricter profiles, repeat-review history, or family-oriented coaching as an optional paid experience
+- analytics path: use intervention outcomes to understand where users hesitate, continue, or cancel, without pretending this MVP is a full fraud-ops platform
+
+This keeps the product within a realistic adoption frame for a prototype: a safety layer that can plug into an existing money-movement surface.
+
 ## How policy context is used
 
 Policy context is not decorative copy. When a risky transfer is detected, the backend maps rule hits to policy topics, ranks seeded or Firestore-backed Malaysia references, and uses those snippets to support the Calm Mode explanation and citations.
@@ -70,3 +81,4 @@ The current policy set is intentionally lightweight and Malaysia-specific. It su
 - Policy coverage is limited to a small seeded dataset plus optional Firestore overrides.
 - The product is a single-user demo prototype, not a multi-account banking system.
 - There is no real bank integration; transfer execution is simulated inside the prototype runtime.
+- Premium coaching, analytics dashboards, and integration work are future adoption paths, not shipped product capabilities in this repo.

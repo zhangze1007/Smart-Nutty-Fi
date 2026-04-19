@@ -46,6 +46,22 @@ Nutty-Fi adds a decision-intervention layer before risky money movement:
 - Data: Firestore-first runtime with in-memory fallback preserved for demo continuity
 - Deployment: single Google Cloud Run service for API routes and the built SPA
 
+## Realistic Adoption Paths
+
+Nutty-Fi is still an MVP, so the credible adoption story is narrow:
+
+- E-wallet safety layer: the current flow can sit in front of a transfer confirmation step as a review layer for higher-risk sends, especially first-time payees or suspicious destinations.
+- Banking or sandbox integration path: a next step would be connecting the same checkpoint logic to sandbox transaction APIs or payee-verification signals while keeping the ledger and settlement system outside this product.
+- Premium safety or coaching layer: the existing risk profiles, Calm Mode history, and what-if checks could support an optional paid safety tier for users who want stronger guardrails or more deliberate money coaching.
+- Fraud-prevention analytics path: the current MVP already logs triggered, confirmed, and cancelled interventions. A realistic next layer would summarize those events for product or risk teams instead of claiming full fraud detection coverage.
+
+What this build does not claim today:
+
+- live bank or e-wallet integrations
+- real payment execution outside the demo runtime
+- bank-grade fraud scoring or case management
+- production-scale analytics infrastructure
+
 ## Submission Focus
 
 This hackathon build prioritizes the judging-critical path:
@@ -151,6 +167,8 @@ Risk logs written by the server:
 - `risk_triggered`
 - `risk_confirmed`
 - `risk_cancelled`
+
+These events are enough to support a demo dashboard, explain intervention outcomes, and illustrate how an eventual product team could review checkpoint behavior. They are not a substitute for a production fraud-monitoring pipeline.
 
 If Firestore is available but `appState/demo` is missing, the server seeds a reproducible baseline automatically. If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
 
