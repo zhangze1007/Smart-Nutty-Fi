@@ -23,7 +23,7 @@ Nutty-Fi adds a decision-intervention layer before risky money movement:
 - deterministic server-side risk evaluation
 - Calm Mode intervention when a transfer needs review
 - policy-backed explanation with citations
-- explicit `Pause for now` or `Continue after review` decision flow
+- explicit `Pause and review later` or `Continue and move money` decision flow
 
 ## Key Flows
 
@@ -47,7 +47,7 @@ This hackathon build prioritizes the judging-critical path:
 - structured Calm Mode reasons with policy citations
 - repo-seeded policy snippets with Firestore override support
 - Firestore-first runtime with fallback preserved
-- explicit `Pause for now` / `Continue after review` path
+- explicit `Pause and review later` / `Continue and move money` path
 - reproducible demo reset flow
 - lightweight safety and accessibility controls on the home screen
 - minimal risk logging for key intervention outcomes
@@ -74,14 +74,14 @@ Profiles:
 
 Default thresholds:
 
-- `conservative`: confirm above RM500, low-balance warning below RM800
-- `balanced`: confirm above RM1000, low-balance warning below RM500
-- `flexible`: confirm above RM2000, low-balance warning below RM250
+- `conservative`: confirm above RM500, low-balance warning below RM800, first-time payee review at any amount
+- `balanced`: confirm above RM1000, low-balance warning below RM500, first-time payee review from RM100
+- `flexible`: confirm above RM2000, low-balance warning below RM250, first-time payee review from RM300
 
 Other review conditions:
 
 - recipient contains a configured high-risk keyword such as `crypto`, `exchange`, or `wallet`
-- recipient is not in the known payee list
+- recipient is not in the known payee list and crosses the selected profile's first-time payee threshold
 - projected remaining balance after upcoming bills drops below the selected profile threshold
 
 ## Policy Context
@@ -182,10 +182,19 @@ Optional risk configuration overrides:
 - `RISK_UNKNOWN_PAYEE_REQUIRES_REVIEW`
 - `RISK_PROFILE_CONSERVATIVE_MAX_TRANSFER_WITHOUT_CONFIRM`
 - `RISK_PROFILE_CONSERVATIVE_MIN_BALANCE_THRESHOLD`
+- `RISK_PROFILE_CONSERVATIVE_UNKNOWN_PAYEE_MINIMUM_AMOUNT`
+- `RISK_PROFILE_CONSERVATIVE_UNKNOWN_PAYEE_SEVERITY`
+- `RISK_PROFILE_CONSERVATIVE_HIGH_RISK_KEYWORD_SEVERITY`
 - `RISK_PROFILE_BALANCED_MAX_TRANSFER_WITHOUT_CONFIRM`
 - `RISK_PROFILE_BALANCED_MIN_BALANCE_THRESHOLD`
+- `RISK_PROFILE_BALANCED_UNKNOWN_PAYEE_MINIMUM_AMOUNT`
+- `RISK_PROFILE_BALANCED_UNKNOWN_PAYEE_SEVERITY`
+- `RISK_PROFILE_BALANCED_HIGH_RISK_KEYWORD_SEVERITY`
 - `RISK_PROFILE_FLEXIBLE_MAX_TRANSFER_WITHOUT_CONFIRM`
 - `RISK_PROFILE_FLEXIBLE_MIN_BALANCE_THRESHOLD`
+- `RISK_PROFILE_FLEXIBLE_UNKNOWN_PAYEE_MINIMUM_AMOUNT`
+- `RISK_PROFILE_FLEXIBLE_UNKNOWN_PAYEE_SEVERITY`
+- `RISK_PROFILE_FLEXIBLE_HIGH_RISK_KEYWORD_SEVERITY`
 
 Production notes:
 
@@ -261,8 +270,8 @@ Cloud Run validation after deploy:
 2. Keep `Balanced` risk profile selected.
 3. In chat, send `Transfer RM5000 to Crypto Exchange`.
 4. Show Calm Mode reasons, rule hits, and policy citations.
-5. Click `Pause for now` to show that no money moves and the decision is logged.
-6. Retry the transfer and click `Continue after review`.
+5. Click `Pause and review later` to show that no money moves and the decision is logged.
+6. Retry the transfer and click `Continue and move money`.
 7. Show the successful transfer response.
 8. Use `Reset demo` if needed to restore the seeded baseline.
 9. Call `/api/health` to show runtime status and configuration source.
