@@ -1,6 +1,6 @@
 {
   "name": "Nutty-Fi",
-  "description": "Natural-language fintech prototype for everyday users in Malaysia.",
+  "description": "Decision-intervention fintech prototype that pauses risky digital money actions before funds move.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

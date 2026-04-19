@@ -1,7 +1,8 @@
 {
-  "name": "react-example",
+  "name": "nutty-fi",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Decision-intervention layer for risky digital money actions.",
   "type": "module",
   "engines": {
     "node": "22.x"
