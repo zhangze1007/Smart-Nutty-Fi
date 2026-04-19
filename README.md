@@ -22,7 +22,7 @@ Nutty-Fi adds a decision-intervention layer before risky money movement:
 - natural-language money actions for transfer, bill review, and what-if intents
 - deterministic server-side risk evaluation
 - Calm Mode intervention when a transfer needs review
-- policy-backed explanation with citations
+- Malaysia-grounded policy explanation with citations
 - explicit `Pause and review later` or `Continue and move money` decision flow
 
 ## Who It Helps

@@ -39,12 +39,6 @@ export type DashboardData = {
   demoState?: DemoStateInfo;
 };
 
-export type PolicyGuideline = {
-  title: string;
-  summary: string;
-  reference: string;
-};
-
 export const mockWeeklySpending: SpendingPoint[] = [
   { name: "Mon", spend: 45 },
   { name: "Tue", spend: 120 },
@@ -96,27 +90,6 @@ export const mockTransactions: AppTransaction[] = [
     createdAt: "2026-04-12T08:20:00.000Z",
     iconKey: "shopping",
     colorKey: "secondary",
-  },
-];
-
-export const mockPolicyGuidelines: PolicyGuideline[] = [
-  {
-    title: "BNM AML/CFT Screening",
-    summary:
-      "High-value or unfamiliar transfers should be reviewed before funds are released, especially when the destination is hard to verify.",
-    reference: "Bank Negara Malaysia AML/CFT controls",
-  },
-  {
-    title: "Scam Prevention Pause",
-    summary:
-      "Transfers involving crypto-style destinations or urgent first-time payees should trigger a pause-and-review step to reduce scam exposure.",
-    reference: "Consumer scam awareness guidance",
-  },
-  {
-    title: "Essential Cash Buffer",
-    summary:
-      "Customers should be warned when a planned payment leaves too little room for upcoming bills or month-end obligations.",
-    reference: "Nutty-Fi Calm Mode risk policy",
   },
 ];
 

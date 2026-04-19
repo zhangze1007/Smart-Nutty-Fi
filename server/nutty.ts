@@ -173,7 +173,7 @@ const searchPolicyGuidelinesTool = ai.defineTool(
   {
     name: "search_policy_guidelines",
     description:
-      "Retrieves policy guidance for Calm Mode explanations, preferring seeded or Firestore-backed regulatory snippets before summarising them.",
+      "Retrieves Malaysia public policy guidance for Calm Mode explanations, preferring seeded or Firestore-backed snippets before summarising them.",
     inputSchema: z.object({
       query: z.string(),
       topics: z.array(z.string()).optional(),

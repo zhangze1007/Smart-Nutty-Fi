@@ -161,7 +161,7 @@ export default function TransactionsView() {
                 No live Calm Mode review is logged in this demo state yet.
               </p>
               <p className="mt-1 text-xs leading-5 text-nutty-text-muted">
-                Trigger a risky transfer to populate this section with real rule hits and citations instead of placeholder copy.
+                Trigger a risky transfer to populate this section with real rule hits and citations from a live Calm Mode event.
               </p>
             </div>
           )}

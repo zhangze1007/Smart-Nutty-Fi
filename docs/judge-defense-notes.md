@@ -27,7 +27,7 @@ Nutty-Fi does not show the same warning for every transfer. It:
 2. Server resolves intent and requested amount/recipient.
 3. Server-side risk rules evaluate the transfer against threshold, destination, known payee, and remaining balance checks.
 4. If the transfer looks safe, it completes normally.
-5. If the transfer looks risky, Calm Mode opens with rule hits, severity, and policy-backed explanation.
+5. If the transfer looks risky, Calm Mode opens with rule hits, severity, and Malaysia-grounded policy context.
 6. User either pauses or deliberately continues.
 7. Outcome is recorded so the review path is part of the product flow, not just UI decoration.
 
@@ -38,7 +38,7 @@ Calm Mode is the checkpoint layer. It shows:
 - why intervention happened
 - which rules were hit
 - whether the checkpoint is medium or high severity
-- policy-backed context for the explanation
+- Malaysia-grounded policy context for the explanation
 - an explicit pause or continue decision
 
 The goal is to slow down risky money movement without blocking normal transfers unnecessarily.
