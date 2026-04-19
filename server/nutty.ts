@@ -88,6 +88,55 @@ const ParsedIntentSchema = z.object({
 type AssistantResponse = z.infer<typeof AssistantResponseSchema>;
 type ParsedIntent = z.infer<typeof ParsedIntentSchema>;
 
+const CASHFLOW_HINT_PATTERNS = [
+  /\bcan i afford\b/i,
+  /\bafter bills?\b/i,
+  /\bremaining balance\b/i,
+  /\bleft after\b/i,
+  /\bhow much (?:would )?(?:be )?left\b/i,
+  /\bwhat (?:happens|would happen)\b/i,
+  /\bif i (?:spend|buy)\b/i,
+  /\bcashflow\b/i,
+];
+
+const MONEY_MOVEMENT_HINT_PATTERNS = [
+  /\btransfer\b/i,
+  /\bsend\b/i,
+  /\bmove\b/i,
+  /\bforward\b/i,
+  /\bwire\b/i,
+  /\bremit\b/i,
+];
+
+const HIGH_RISK_DESTINATION_HINT_PATTERNS = [/\bwallet\b/i, /\bexchange\b/i, /\bcrypto\b/i];
+
+const SCAM_CONTEXT_HINT_PATTERNS = [
+  /\burgent(?:ly)?\b/i,
+  /\bunlock\b/i,
+  /\bprize\b/i,
+  /\bclaim\b/i,
+  /\brelease\b/i,
+  /\bverify\b/i,
+];
+
+const KNOWN_BILLERS = [
+  {
+    pattern: /\bunifi\b/i,
+    biller: "Unifi Broadband",
+    defaultAmount: 159,
+  },
+  {
+    pattern: /\btnb\b/i,
+    biller: "TNB Utilities",
+    defaultAmount: 120,
+  },
+  {
+    pattern: /\bmaxis\b/i,
+    biller: "Maxis Mobile",
+    defaultAmount: 85,
+  },
+];
+
 const riskCheckTool = ai.defineTool(
   {
     name: "risk_check",
@@ -285,7 +334,100 @@ function extractAmount(message: string) {
   return Number(match[1].replace(/,/g, ""));
 }
 
+function matchesAnyPattern(patterns: RegExp[], value: string) {
+  return patterns.some((pattern) => pattern.test(value));
+}
+
+function findKnownBiller(message: string) {
+  return KNOWN_BILLERS.find(({ pattern }) => pattern.test(message)) ?? null;
+}
+
+function extractTransferRecipient(message: string) {
+  const recipientMatch =
+    message.match(
+      /\b(?:transfer|send|move|forward|wire|remit)\b.*?\b(?:to|into)\s+(.+?)(?=\s+to\s+(?:unlock|claim|release|get|receive)\b|\s+(?:because|after|before|so that|so|while)\b|[.!?]|$)/i,
+    ) ??
+    message.match(
+      /\b(?:to|into)\s+(.+?)(?=\s+to\s+(?:unlock|claim|release|get|receive)\b|\s+(?:because|after|before|so that|so|while)\b|[.!?]|$)/i,
+    ) ??
+    message.match(/\b(?:to|into)\s+(.+)$/i);
+
+  if (!recipientMatch) {
+    if (/\bwallet\b/i.test(message)) {
+      return "Wallet Destination";
+    }
+
+    if (/\bcrypto\b/i.test(message) || /\bexchange\b/i.test(message)) {
+      return "Crypto Exchange";
+    }
+
+    return null;
+  }
+
+  const normalizedRecipient = recipientMatch[1]
+    .replace(/\b(?:right now|immediately)\b/gi, "")
+    .trim();
+
+  return normalizedRecipient ? titleCase(normalizedRecipient) : null;
+}
+
+export function parseIntentDeterministically(message: string): ParsedIntent {
+  const lowerMessage = message.toLowerCase();
+  const amount = extractAmount(message);
+  const knownBiller = findKnownBiller(message);
+
+  if (matchesAnyPattern(CASHFLOW_HINT_PATTERNS, message)) {
+    return {
+      intent: "calculate_cashflow",
+      amount,
+      recipient: null,
+      biller: null,
+      purchaseName: "this spend",
+    };
+  }
+
+  if (knownBiller || lowerMessage.includes("bill")) {
+    return {
+      intent: "pay_bill",
+      amount: amount ?? knownBiller?.defaultAmount ?? 159,
+      recipient: null,
+      biller: knownBiller?.biller ?? "Utility Bill",
+      purchaseName: null,
+    };
+  }
+
+  const looksLikeTransfer =
+    matchesAnyPattern(MONEY_MOVEMENT_HINT_PATTERNS, message) ||
+    (amount !== null &&
+      (matchesAnyPattern(HIGH_RISK_DESTINATION_HINT_PATTERNS, message) ||
+        matchesAnyPattern(SCAM_CONTEXT_HINT_PATTERNS, message)));
+
+  if (looksLikeTransfer) {
+    return {
+      intent: "transfer_money",
+      amount,
+      recipient: extractTransferRecipient(message),
+      biller: null,
+      purchaseName: null,
+    };
+  }
+
+  return {
+    intent: "unknown",
+    amount: null,
+    recipient: null,
+    biller: null,
+    purchaseName: null,
+  };
+}
+
 function fallbackParseIntent(message: string): ParsedIntent {
+  const deterministicIntent = parseIntentDeterministically(message);
+
+  if (deterministicIntent.intent !== "unknown") {
+    return deterministicIntent;
+  }
+
   const lowerMessage = message.toLowerCase();
   const amount = extractAmount(message);
 
@@ -361,6 +503,11 @@ User message: ${message}
         temperature: 0.1,
       },
     });
+
+    const deterministicIntent = parseIntentDeterministically(message);
+    if (deterministicIntent.intent !== "unknown") {
+      return deterministicIntent;
+    }
 
     return response.output ?? fallbackParseIntent(message);
   } catch {
