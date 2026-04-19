@@ -19,7 +19,7 @@ Digital money actions are fast, easy, and often irreversible. A risky transfer s
 
 Nutty-Fi adds a decision-intervention layer before risky money movement:
 
-- natural-language money actions for transfer, bill, and what-if intents
+- natural-language money actions for transfer, bill review, and what-if intents
 - deterministic server-side risk evaluation
 - Calm Mode intervention when a transfer needs review
 - policy-backed explanation with citations
@@ -292,5 +292,6 @@ Cloud Run validation after deploy:
 ## Notes
 
 - Gemini is optional for local development. Without `GEMINI_API_KEY`, the backend falls back to deterministic intent parsing.
+- Bill intents are review-only in this hackathon build; Nutty does not execute bill payments.
 - Policy snippets in this repo are short paraphrases plus source metadata, not full documents.
 - BigQuery and expanded analytics were intentionally deferred to reduce deployment risk for the hackathon build.

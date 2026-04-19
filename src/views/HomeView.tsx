@@ -194,7 +194,7 @@ export default function HomeView({
           <div className="flex-1">
             <p className="text-sm font-medium text-nutty-text-main">Describe a money action</p>
             <p className="text-xs text-nutty-text-muted">
-              &quot;Pay my Unifi bill&quot; or &quot;Transfer RM50 to Ali&quot;
+              &quot;Review my Unifi bill&quot; or &quot;Transfer RM50 to Ali&quot;
             </p>
           </div>
           <ArrowRight className="h-5 w-5 text-nutty-text-muted" />

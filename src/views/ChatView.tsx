@@ -280,7 +280,7 @@ export default function ChatView({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && handleSend()}
-            placeholder="Describe a transfer, bill, or what-if check..."
+            placeholder="Describe a transfer, bill review, or what-if check..."
             className="h-12 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0"
           />
           <Button

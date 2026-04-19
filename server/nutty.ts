@@ -260,7 +260,7 @@ const transferMoneyTool = ai.defineTool(
 const payBillTool = ai.defineTool(
   {
     name: "pay_bill",
-    description: "Handles a simple bill payment response for known Malaysian utility-style bills.",
+    description: "Acknowledges a recognised bill request without executing a real bill payment.",
     inputSchema: z.object({
       biller: z.string(),
       amount: z.number(),
@@ -272,7 +272,7 @@ const payBillTool = ai.defineTool(
   },
   async ({ biller, amount }) => ({
     success: true,
-    message: `Nutty is ready to pay RM${amount.toFixed(2)} to ${biller}.`,
+    message: createBillReviewReply({ biller, amount }),
   }),
 );
 
@@ -492,6 +492,8 @@ Supported intents:
 Interpret amounts as Malaysian Ringgit.
 For transfer_money, fill recipient and amount when available.
 For pay_bill, fill biller and amount when available.
+Affordability or remaining-balance questions belong to calculate_cashflow, not pay_bill.
+Scam-like requests to move money to wallets, exchanges, or prize-unlock destinations belong to transfer_money.
 For calculate_cashflow, fill purchaseName and amount when available.
 
 User message: ${message}
@@ -528,6 +530,12 @@ function createCalmModeFallbackReply(input: {
   return `Nutty paused RM${input.amount.toFixed(
     2,
   )} to ${input.recipient} because ${primaryReason}. Policy context: ${input.policySummary} Continue only if you have verified the recipient using ${primaryCitation}.`;
+}
+
+export function createBillReviewReply(input: { biller: string; amount: number }) {
+  return `Nutty recognised a bill request for RM${input.amount.toFixed(
+    2,
+  )} to ${input.biller}, but this demo does not execute bill payments. Use the what-if check to review the impact before you pay it elsewhere.`;
 }
 
 async function generateCalmModeReply(input: {
@@ -754,7 +762,7 @@ export const assistantFlow = ai.defineFlow(
     }
 
     return {
-      reply: "I can help you transfer money, pay a bill, or check a what-if cashflow scenario.",
+      reply: "I can help with transfer safety, bill review, or a what-if cashflow scenario.",
       intent: "unknown",
       status: "info",
       actionCard: null,
