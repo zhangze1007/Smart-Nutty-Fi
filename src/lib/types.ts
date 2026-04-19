@@ -55,6 +55,7 @@ export type TransferResolutionEvent = {
 export type RiskPrompt = {
   amount: number;
   recipient: string;
+  severity: "medium" | "high";
   reasons: string[];
   ruleHits: RiskRuleHit[];
   citations: PolicyCitation[];

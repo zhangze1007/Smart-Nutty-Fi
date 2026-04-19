@@ -9,6 +9,9 @@ export type RiskProfileConfig = {
   maxTransferWithoutConfirm: number;
   minBalanceThreshold: number;
   explanationTone: "cautious" | "balanced" | "light";
+  unknownPayeeMinimumAmount: number;
+  unknownPayeeSeverity: "medium" | "high";
+  highRiskKeywordSeverity: "medium" | "high";
 };
 
 export type RiskConfig = {
@@ -40,16 +43,25 @@ const DEFAULT_RISK_CONFIG: RiskConfig = {
       maxTransferWithoutConfirm: 500,
       minBalanceThreshold: 800,
       explanationTone: "cautious",
+      unknownPayeeMinimumAmount: 0,
+      unknownPayeeSeverity: "high",
+      highRiskKeywordSeverity: "high",
     },
     balanced: {
       maxTransferWithoutConfirm: 1000,
       minBalanceThreshold: 500,
       explanationTone: "balanced",
+      unknownPayeeMinimumAmount: 100,
+      unknownPayeeSeverity: "medium",
+      highRiskKeywordSeverity: "high",
     },
     flexible: {
       maxTransferWithoutConfirm: 2000,
       minBalanceThreshold: 250,
       explanationTone: "light",
+      unknownPayeeMinimumAmount: 300,
+      unknownPayeeSeverity: "medium",
+      highRiskKeywordSeverity: "medium",
     },
   },
   source: "default",
@@ -88,6 +100,23 @@ function parseNumber(value: unknown) {
     if (Number.isFinite(parsedValue)) {
       return parsedValue;
     }
+  }
+
+  return null;
+}
+
+function parseSeverity(value: unknown): "medium" | "high" | null {
+  if (value === "medium" || value === "high") {
+    return value;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const normalizedValue = value.trim().toLowerCase();
+  if (normalizedValue === "medium" || normalizedValue === "high") {
+    return normalizedValue;
   }
 
   return null;
@@ -138,7 +167,10 @@ function hasOverrideContent(override: RiskConfigOverride) {
           profileOverride &&
             (profileOverride.maxTransferWithoutConfirm !== undefined ||
               profileOverride.minBalanceThreshold !== undefined ||
-              profileOverride.explanationTone !== undefined),
+              profileOverride.explanationTone !== undefined ||
+              profileOverride.unknownPayeeMinimumAmount !== undefined ||
+              profileOverride.unknownPayeeSeverity !== undefined ||
+              profileOverride.highRiskKeywordSeverity !== undefined),
         ),
       ),
   );
@@ -191,6 +223,13 @@ export function readRiskConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Ris
       ),
       minBalanceThreshold: parseNumber(env.RISK_PROFILE_CONSERVATIVE_MIN_BALANCE_THRESHOLD),
       explanationTone: "cautious" as const,
+      unknownPayeeMinimumAmount: parseNumber(
+        env.RISK_PROFILE_CONSERVATIVE_UNKNOWN_PAYEE_MINIMUM_AMOUNT,
+      ),
+      unknownPayeeSeverity: parseSeverity(env.RISK_PROFILE_CONSERVATIVE_UNKNOWN_PAYEE_SEVERITY),
+      highRiskKeywordSeverity: parseSeverity(
+        env.RISK_PROFILE_CONSERVATIVE_HIGH_RISK_KEYWORD_SEVERITY,
+      ),
     },
     balanced: {
       maxTransferWithoutConfirm: parseNumber(
@@ -198,11 +237,25 @@ export function readRiskConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Ris
       ),
       minBalanceThreshold: parseNumber(env.RISK_PROFILE_BALANCED_MIN_BALANCE_THRESHOLD),
       explanationTone: "balanced" as const,
+      unknownPayeeMinimumAmount: parseNumber(
+        env.RISK_PROFILE_BALANCED_UNKNOWN_PAYEE_MINIMUM_AMOUNT,
+      ),
+      unknownPayeeSeverity: parseSeverity(env.RISK_PROFILE_BALANCED_UNKNOWN_PAYEE_SEVERITY),
+      highRiskKeywordSeverity: parseSeverity(
+        env.RISK_PROFILE_BALANCED_HIGH_RISK_KEYWORD_SEVERITY,
+      ),
     },
     flexible: {
       maxTransferWithoutConfirm: parseNumber(env.RISK_PROFILE_FLEXIBLE_MAX_TRANSFER_WITHOUT_CONFIRM),
       minBalanceThreshold: parseNumber(env.RISK_PROFILE_FLEXIBLE_MIN_BALANCE_THRESHOLD),
       explanationTone: "light" as const,
+      unknownPayeeMinimumAmount: parseNumber(
+        env.RISK_PROFILE_FLEXIBLE_UNKNOWN_PAYEE_MINIMUM_AMOUNT,
+      ),
+      unknownPayeeSeverity: parseSeverity(env.RISK_PROFILE_FLEXIBLE_UNKNOWN_PAYEE_SEVERITY),
+      highRiskKeywordSeverity: parseSeverity(
+        env.RISK_PROFILE_FLEXIBLE_HIGH_RISK_KEYWORD_SEVERITY,
+      ),
     },
   };
 
@@ -214,14 +267,23 @@ export function readRiskConfigFromEnv(env: NodeJS.ProcessEnv = process.env): Ris
       conservative: {
         maxTransferWithoutConfirm: profiles.conservative.maxTransferWithoutConfirm ?? undefined,
         minBalanceThreshold: profiles.conservative.minBalanceThreshold ?? undefined,
+        unknownPayeeMinimumAmount: profiles.conservative.unknownPayeeMinimumAmount ?? undefined,
+        unknownPayeeSeverity: profiles.conservative.unknownPayeeSeverity ?? undefined,
+        highRiskKeywordSeverity: profiles.conservative.highRiskKeywordSeverity ?? undefined,
       },
       balanced: {
         maxTransferWithoutConfirm: profiles.balanced.maxTransferWithoutConfirm ?? undefined,
         minBalanceThreshold: profiles.balanced.minBalanceThreshold ?? undefined,
+        unknownPayeeMinimumAmount: profiles.balanced.unknownPayeeMinimumAmount ?? undefined,
+        unknownPayeeSeverity: profiles.balanced.unknownPayeeSeverity ?? undefined,
+        highRiskKeywordSeverity: profiles.balanced.highRiskKeywordSeverity ?? undefined,
       },
       flexible: {
         maxTransferWithoutConfirm: profiles.flexible.maxTransferWithoutConfirm ?? undefined,
         minBalanceThreshold: profiles.flexible.minBalanceThreshold ?? undefined,
+        unknownPayeeMinimumAmount: profiles.flexible.unknownPayeeMinimumAmount ?? undefined,
+        unknownPayeeSeverity: profiles.flexible.unknownPayeeSeverity ?? undefined,
+        highRiskKeywordSeverity: profiles.flexible.highRiskKeywordSeverity ?? undefined,
       },
     },
   };
@@ -253,6 +315,9 @@ function parseRiskConfigRecord(record: Record<string, unknown>): RiskConfigOverr
         rawProfile.explanationTone === "light"
           ? rawProfile.explanationTone
           : undefined,
+      unknownPayeeMinimumAmount: parseNumber(rawProfile.unknownPayeeMinimumAmount) ?? undefined,
+      unknownPayeeSeverity: parseSeverity(rawProfile.unknownPayeeSeverity) ?? undefined,
+      highRiskKeywordSeverity: parseSeverity(rawProfile.highRiskKeywordSeverity) ?? undefined,
     };
   };
 

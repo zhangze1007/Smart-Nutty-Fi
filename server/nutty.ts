@@ -380,7 +380,7 @@ function createCalmModeFallbackReply(input: {
 
   return `Nutty paused RM${input.amount.toFixed(
     2,
-  )} to ${input.recipient} because ${primaryReason} ${input.policySummary} Please pause unless you have verified the recipient using ${primaryCitation}.`;
+  )} to ${input.recipient} because ${primaryReason}. Policy context: ${input.policySummary} Continue only if you have verified the recipient using ${primaryCitation}.`;
 }
 
 async function generateCalmModeReply(input: {
@@ -400,7 +400,9 @@ async function generateCalmModeReply(input: {
       model: googleAI.model("gemini-2.5-flash"),
       prompt: `
 You are Nutty-Fi's Calm Mode explainer.
-Write a short explanation under 85 words.
+Write exactly 2 short sentences under 75 words total.
+Sentence 1: explain the strongest reason this transfer was paused.
+Sentence 2: give the policy-backed context in plain language and tell the user to continue only if they have verified the transfer.
 Be clear, calm, and specific.
 
 Transfer recipient: ${input.recipient}
@@ -414,8 +416,6 @@ ${input.policySummary}
 
 Citations to reference briefly:
 ${input.citations.map((citation) => `- ${citation.title} (${citation.source})`).join("\n")}
-
-End by telling the user to continue only if they have verified the transfer.
       `,
       config: {
         temperature: 0.2,

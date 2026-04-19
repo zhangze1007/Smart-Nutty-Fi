@@ -19,14 +19,15 @@ type Message = {
   content: string;
   action?: {
     type: "transfer";
-    data: {
-      recipient: string;
-      amount: number;
-      status: "requires_confirmation" | "completed";
-      reasons: string[];
-      ruleHits: RiskRuleHit[];
-      citations: PolicyCitation[];
-      policySummary: string;
+      data: {
+        recipient: string;
+        amount: number;
+        status: "requires_confirmation" | "completed";
+        severity: "medium" | "high";
+        reasons: string[];
+        ruleHits: RiskRuleHit[];
+        citations: PolicyCitation[];
+        policySummary: string;
       riskLogId: string | null;
       appliedProfile: RiskProfileId;
     };
@@ -46,6 +47,7 @@ function createAssistantMessage(response: AssistantResponse): Message {
               recipient: response.actionCard.recipient,
               amount: response.actionCard.amount,
               status: response.status === "requires_confirmation" ? "requires_confirmation" : "completed",
+              severity: response.calmMode?.severity ?? "medium",
               reasons: response.calmMode?.reasons ?? [],
               ruleHits: response.calmMode?.ruleHits ?? [],
               citations: response.calmMode?.citations ?? [],
@@ -115,6 +117,7 @@ export default function ChatView({
       onRiskTrigger({
         amount: response.confirmation.amount,
         recipient: response.confirmation.recipient,
+        severity: response.calmMode.severity,
         reasons: response.calmMode.reasons,
         ruleHits: response.calmMode.ruleHits,
         citations: response.calmMode.citations,
@@ -209,6 +212,25 @@ export default function ChatView({
                 <div className="mt-1 w-full animate-in slide-in-from-bottom-2 fade-in duration-300">
                   <div className="w-full max-w-[280px] rounded-2xl border border-nutty-border bg-nutty-card p-4 shadow-sm">
                     <p className="mb-1 text-xs text-nutty-text-muted">Transfer request</p>
+                    {message.action.data.status === "requires_confirmation" && (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-[#FFF1E6] px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#9A3412]">
+                          Decision checkpoint
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                            message.action.data.severity === "high"
+                              ? "bg-[#FEE2E2] text-[#B91C1C]"
+                              : "bg-[#FEF3C7] text-[#B45309]",
+                          )}
+                        >
+                          {message.action.data.severity === "high"
+                            ? "High-risk review"
+                            : "Review recommended"}
+                        </span>
+                      </div>
+                    )}
                     <p className="mb-2 text-sm font-medium text-nutty-text-main">
                       {message.action.data.recipient}
                     </p>
@@ -224,6 +246,7 @@ export default function ChatView({
                           onRiskTrigger({
                             amount: message.action!.data.amount,
                             recipient: message.action!.data.recipient,
+                            severity: message.action!.data.severity,
                             reasons: message.action!.data.reasons,
                             ruleHits: message.action!.data.ruleHits,
                             citations: message.action!.data.citations,

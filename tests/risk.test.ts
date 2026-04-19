@@ -49,4 +49,31 @@ describe("assessTransferRisk", () => {
     expect(assessment.ruleHits[0]?.policyTopics.length).toBeGreaterThan(0);
     expect(assessment.reasons).toHaveLength(4);
   });
+
+  it("makes first-time payee review stricter for conservative than flexible", async () => {
+    const baseConfig = await loadRiskConfig({ db: null });
+    const conservativeAssessment = assessTransferRisk(
+      {
+        recipient: "New Seller",
+        amount: 150,
+        currentBalance: 2500,
+        upcomingBills: 400,
+        knownPayees: ["Ali bin Abu"],
+      },
+      resolveRiskConfig(baseConfig, "conservative"),
+    );
+    const flexibleAssessment = assessTransferRisk(
+      {
+        recipient: "New Seller",
+        amount: 150,
+        currentBalance: 2500,
+        upcomingBills: 400,
+        knownPayees: ["Ali bin Abu"],
+      },
+      resolveRiskConfig(baseConfig, "flexible"),
+    );
+
+    expect(conservativeAssessment.ruleHits.map((ruleHit) => ruleHit.code)).toContain("unknown_payee");
+    expect(flexibleAssessment.ruleHits.map((ruleHit) => ruleHit.code)).not.toContain("unknown_payee");
+  });
 });

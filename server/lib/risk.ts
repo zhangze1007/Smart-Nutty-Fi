@@ -109,17 +109,27 @@ export function assessTransferRisk(
       code: "high_risk_keyword",
       title: "Destination looks higher risk",
       detail: `The recipient name includes "${matchedKeyword}", which Nutty treats as a higher-risk keyword that should be reviewed before funds move.`,
-      severity: "high",
+      severity: config.highRiskKeywordSeverity,
       policyTopics: ["financial_crime", "consumer_alert", "scam_verification"],
     });
   }
 
-  if (config.unknownPayeeRequiresReview && !knownPayee) {
+  const shouldReviewUnknownPayee =
+    config.unknownPayeeRequiresReview &&
+    !knownPayee &&
+    input.amount >= config.unknownPayeeMinimumAmount;
+
+  if (shouldReviewUnknownPayee) {
     ruleHits.push({
       code: "unknown_payee",
       title: "Recipient is not in the known payee list",
-      detail: "First-time or unfamiliar recipients are paused so the user can verify the destination before sending money.",
-      severity: "medium",
+      detail:
+        config.unknownPayeeMinimumAmount > 0
+          ? `This ${config.requestedProfile} profile pauses first-time recipients from ${formatCurrency(
+              config.unknownPayeeMinimumAmount,
+            )} upward so the destination can be verified before money moves.`
+          : `This ${config.requestedProfile} profile pauses first-time recipients so the destination can be verified before money moves.`,
+      severity: config.unknownPayeeSeverity,
       policyTopics: ["money_mule", "unknown_payee", "scam_verification"],
     });
   }

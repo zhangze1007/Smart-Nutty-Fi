@@ -665,9 +665,7 @@ export async function getPolicySearchResult(input: { query: string; topics?: str
   const matchedDocuments = rankedDocuments.slice(0, 2);
 
   return {
-    summary: matchedDocuments
-      .map((document) => `${document.title}: ${document.summary}`)
-      .join(" "),
+    summary: matchedDocuments.map((document) => document.summary).join(" "),
     citations: matchedDocuments.map(createPolicyCitation),
     source,
   };

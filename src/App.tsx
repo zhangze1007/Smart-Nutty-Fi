@@ -54,6 +54,10 @@ function getRiskProfileLabel(riskProfile: RiskProfileId) {
   return "Balanced";
 }
 
+function getCheckpointLabel(severity: "medium" | "high") {
+  return severity === "high" ? "High-risk checkpoint" : "Review checkpoint";
+}
+
 function readStoredRiskProfile(): RiskProfileId {
   const storedValue = safeReadStorage(RISK_PROFILE_STORAGE_KEY);
   if (
@@ -285,6 +289,21 @@ export default function App() {
                 <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-[#C2410C]">
                   Calm Mode
                 </p>
+                <div className="mb-3 flex items-center justify-center gap-2">
+                  <span className="rounded-full bg-[#FFF1E6] px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9A3412]">
+                    Decision checkpoint
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]",
+                      riskData.severity === "high"
+                        ? "bg-[#FEE2E2] text-[#B91C1C]"
+                        : "bg-[#FEF3C7] text-[#B45309]",
+                    )}
+                  >
+                    {getCheckpointLabel(riskData.severity)}
+                  </span>
+                </div>
                 <h2 id="calm-mode-title" className="mb-2 text-2xl font-bold text-[#7C2D12]">
                   Pause before sending.
                 </h2>
@@ -303,8 +322,37 @@ export default function App() {
                 No money moves until you choose whether to pause or continue after review.
               </div>
 
+              <div className="mb-4 grid grid-cols-3 gap-3">
+                <div className="rounded-2xl border border-[#FED7AA] bg-white/80 px-3 py-3 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C2410C]">
+                    Severity
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[#7C2D12]">
+                    {riskData.severity === "high" ? "High" : "Medium"}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#FED7AA] bg-white/80 px-3 py-3 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C2410C]">
+                    Rule hits
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[#7C2D12]">
+                    {riskData.ruleHits.length}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#FED7AA] bg-white/80 px-3 py-3 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C2410C]">
+                    Profile
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-[#7C2D12]">
+                    {getRiskProfileLabel(riskData.appliedProfile)}
+                  </p>
+                </div>
+              </div>
+
               <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/80 p-4">
-                <p className="mb-3 text-sm font-semibold text-[#9A3412]">Why this transfer was paused</p>
+                <p className="mb-3 text-sm font-semibold text-[#9A3412]">
+                  Rule-driven reasons for review
+                </p>
                 <div className="flex flex-col gap-3">
                   {riskData.ruleHits.map((ruleHit) => (
                     <div
@@ -351,14 +399,14 @@ export default function App() {
                   className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#FDBA74] bg-white font-medium text-[#9A3412] transition-colors hover:bg-[#FFF1E6] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <PauseCircle className="h-4 w-4" />
-                  {isCancellingRisk ? "Pausing..." : "Pause for now"}
+                  {isCancellingRisk ? "Pausing..." : "Pause and review later"}
                 </button>
                 <button
                   onClick={confirmRiskyTransfer}
                   disabled={isConfirmingRisk || isCancellingRisk}
                   className="h-14 w-full rounded-2xl bg-[#9A3412] font-medium text-white transition-colors hover:bg-[#7C2D12] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isConfirmingRisk ? "Confirming transfer..." : "Continue after review"}
+                  {isConfirmingRisk ? "Confirming transfer..." : "Continue and move money"}
                 </button>
               </div>
             </div>
