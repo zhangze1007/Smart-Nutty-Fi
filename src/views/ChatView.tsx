@@ -293,8 +293,11 @@ export default function ChatView({
           </Button>
         </div>
         <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
-          <SuggestionBadge text="Pay Unifi bill" onClick={() => setInput("Pay my Unifi bill")} />
           <SuggestionBadge text="Transfer RM50 to Ali" onClick={() => setInput("Transfer RM50 to Ali")} />
+          <SuggestionBadge
+            text="Review first-time payee"
+            onClick={() => setInput("Transfer RM350 to New Seller")}
+          />
           <SuggestionBadge
             text="Review crypto transfer"
             onClick={() => setInput("Transfer RM5000 to Crypto Exchange")}

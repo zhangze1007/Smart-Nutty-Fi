@@ -1,15 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ArrowRightLeft,
-  CreditCard,
-  Wallet,
-  TrendingDown,
+  ShieldCheck,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
   Type,
   RotateCcw,
   Info,
+  ScrollText,
+  Wallet,
 } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
@@ -44,6 +43,7 @@ export default function HomeView({
     tone: "success" | "error";
     message: string;
   }>(null);
+  const simulatorSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -88,6 +88,13 @@ export default function HomeView({
     dashboard.currentBalance - dashboard.upcomingBills - (parseFloat(simulatorAmount) || 0);
   const demoState = dashboard.demoState;
   const baselineBalance = demoState?.baselineBalance ?? mockDashboardData.currentBalance;
+
+  const scrollToSimulator = () => {
+    simulatorSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-nutty-bg pb-8">
@@ -151,14 +158,14 @@ export default function HomeView({
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-white/10 py-3 text-sm font-medium backdrop-blur-sm transition-colors hover:bg-white/20"
             >
               <ArrowRightLeft className="h-4 w-4" />
-              Transfer
+              Start transfer
             </button>
             <button
-              onClick={() => onNavigate("chat")}
+              onClick={scrollToSimulator}
               className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-nutty-card py-3 text-sm font-medium text-nutty-text-main transition-colors hover:bg-nutty-bg"
             >
-              <CreditCard className="h-4 w-4" />
-              Pay Bill
+              <Wallet className="h-4 w-4" />
+              What-if check
             </button>
           </div>
 
@@ -194,12 +201,26 @@ export default function HomeView({
         </div>
 
         <div>
-          <h3 className="mb-3 px-1 text-sm font-bold text-nutty-text-main">Quick Actions</h3>
-          <div className="grid grid-cols-4 gap-3">
-            <QuickAction icon={<Wallet />} label="Top Up" />
-            <QuickAction icon={<ArrowRightLeft />} label="Transfer" onClick={() => onNavigate("chat")} />
-            <QuickAction icon={<CreditCard />} label="Bills" onClick={() => onNavigate("chat")} />
-            <QuickAction icon={<TrendingDown />} label="Spending" onClick={() => onNavigate("transactions")} />
+          <h3 className="mb-3 px-1 text-sm font-bold text-nutty-text-main">Core Demo Paths</h3>
+          <div className="grid gap-3">
+            <FocusPathCard
+              icon={<ArrowRightLeft />}
+              title="Transfer with review"
+              description="Run the main flow: natural-language transfer, server-side risk check, then Calm Mode if needed."
+              onClick={() => onNavigate("chat")}
+            />
+            <FocusPathCard
+              icon={<Wallet />}
+              title="What-if before spending"
+              description="Check the remaining buffer before committing to a new spend."
+              onClick={scrollToSimulator}
+            />
+            <FocusPathCard
+              icon={<ScrollText />}
+              title="Policy context"
+              description="Show the rule-backed context that explains why Nutty pauses risky money movement."
+              onClick={() => onNavigate("transactions")}
+            />
           </div>
         </div>
 
@@ -238,27 +259,6 @@ export default function HomeView({
               <p className="mt-2 text-xs text-nutty-text-muted">{riskProfileDescriptions[riskProfile]}</p>
             </div>
 
-            <div>
-              <div className="mb-2 flex items-center gap-2">
-                <Type className="h-4 w-4 text-nutty-primary" />
-                <p className="text-xs font-semibold uppercase tracking-wide text-nutty-text-muted">
-                  Text size
-                </p>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <SettingChip
-                  label="Standard"
-                  active={textScale === "standard"}
-                  onClick={() => onTextScaleChange("standard")}
-                />
-                <SettingChip
-                  label="Large"
-                  active={textScale === "large"}
-                  onClick={() => onTextScaleChange("large")}
-                />
-              </div>
-            </div>
-
             <div className="rounded-xl border border-dashed border-[#FDBA74] bg-[#FFF7ED] p-4">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -285,15 +285,36 @@ export default function HomeView({
                 </p>
               )}
             </div>
+
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <Type className="h-4 w-4 text-nutty-primary" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-nutty-text-muted">
+                  Accessibility
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <SettingChip
+                  label="Standard"
+                  active={textScale === "standard"}
+                  onClick={() => onTextScaleChange("standard")}
+                />
+                <SettingChip
+                  label="Large"
+                  active={textScale === "large"}
+                  onClick={() => onTextScaleChange("large")}
+                />
+              </div>
+            </div>
           </div>
         </Card>
 
-        <Card className="overflow-hidden border-none bg-nutty-card shadow-sm">
+        <Card ref={simulatorSectionRef} className="overflow-hidden border-none bg-nutty-card shadow-sm">
           <div className="border-b border-nutty-border bg-nutty-bg p-5">
-              <div className="mb-1 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-nutty-primary" />
-                <h3 className="text-sm font-bold text-nutty-text-main">What-If Simulator</h3>
-              </div>
+            <div className="mb-1 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-nutty-primary" />
+              <h3 className="text-sm font-bold text-nutty-text-main">What-If Simulator</h3>
+            </div>
             <p className="text-xs text-nutty-text-muted">
               Check your remaining buffer before you commit to a new spend.
             </p>
@@ -353,21 +374,30 @@ export default function HomeView({
   );
 }
 
-function QuickAction({
+function FocusPathCard({
   icon,
-  label,
+  title,
+  description,
   onClick,
 }: {
   icon: React.ReactNode;
-  label: string;
-  onClick?: () => void;
+  title: string;
+  description: string;
+  onClick: () => void;
 }) {
   return (
-    <button onClick={onClick} className="flex flex-col items-center gap-2">
-      <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-nutty-border bg-nutty-card text-nutty-text-muted shadow-sm transition-colors hover:bg-nutty-bg hover:text-nutty-primary">
-        {React.cloneElement(icon as React.ReactElement, { className: "w-6 h-6" })}
+    <button
+      onClick={onClick}
+      className="flex items-start gap-3 rounded-2xl border border-nutty-border bg-nutty-card p-4 text-left shadow-sm transition-colors hover:border-nutty-accent hover:bg-white"
+    >
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-nutty-bg text-nutty-primary">
+        {React.cloneElement(icon as React.ReactElement, { className: "h-5 w-5" })}
       </div>
-      <span className="text-xs font-medium text-nutty-text-muted">{label}</span>
+      <div className="flex-1">
+        <p className="text-sm font-semibold text-nutty-text-main">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-nutty-text-muted">{description}</p>
+      </div>
+      <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-nutty-text-muted" />
     </button>
   );
 }

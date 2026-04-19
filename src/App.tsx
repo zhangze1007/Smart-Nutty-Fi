@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Home, MessageSquare, PieChart, ShieldAlert, PauseCircle, ExternalLink } from "lucide-react";
+import { Home, MessageSquare, ScrollText, ShieldAlert, PauseCircle, ExternalLink } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type {
@@ -256,13 +256,13 @@ export default function App() {
           />
           <NavItem
             icon={<MessageSquare className="h-6 w-6" />}
-            label="Nutty"
+            label="Transfer"
             isActive={currentView === "chat"}
             onClick={() => setCurrentView("chat")}
           />
           <NavItem
-            icon={<PieChart className="h-6 w-6" />}
-            label="Spending"
+            icon={<ScrollText className="h-6 w-6" />}
+            label="Policy"
             isActive={currentView === "transactions"}
             onClick={() => setCurrentView("transactions")}
           />
