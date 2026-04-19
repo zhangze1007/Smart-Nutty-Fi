@@ -366,6 +366,7 @@ function extractTransferRecipient(message: string) {
 
   const normalizedRecipient = recipientMatch[1]
     .replace(/\b(?:right now|immediately)\b/gi, "")
+    .replace(/\b(?:now|today)\b$/i, "")
     .trim();
 
   return normalizedRecipient ? titleCase(normalizedRecipient) : null;

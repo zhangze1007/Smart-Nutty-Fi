@@ -13,6 +13,14 @@ describe("deterministic intent parsing", () => {
     expect(result.recipient).toBe("His Wallet");
   });
 
+  it("keeps wallet-style send phrasing on the transfer path", () => {
+    const result = parseIntentDeterministically("Send RM200 to new wallet address now");
+
+    expect(result.intent).toBe("transfer_money");
+    expect(result.amount).toBe(200);
+    expect(result.recipient).toBe("New Wallet Address");
+  });
+
   it("classifies affordability questions as cashflow checks instead of bill pay", () => {
     const result = parseIntentDeterministically("Can I afford RM480 after bills?");
 

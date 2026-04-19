@@ -1,6 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { shouldAutoResetDemo } from "../src/lib/judgeMode.js";
+import {
+  markJudgeModeInitialized,
+  readJudgeModeInitialized,
+  shouldAutoResetDemo,
+} from "../src/lib/judgeMode.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 describe("judge mode auto reset", () => {
   it("auto-resets only when stale persisted demo data is present on first load", () => {
@@ -42,5 +50,24 @@ describe("judge mode auto reset", () => {
         true,
       ),
     ).toBe(false);
+  });
+
+  it("persists the first-load marker when sessionStorage is available", () => {
+    const storage = new Map<string, string>();
+
+    vi.stubGlobal("window", {
+      sessionStorage: {
+        getItem: (key: string) => storage.get(key) ?? null,
+        setItem: (key: string, value: string) => {
+          storage.set(key, value);
+        },
+      },
+    });
+
+    expect(readJudgeModeInitialized()).toBe(false);
+
+    markJudgeModeInitialized();
+
+    expect(readJudgeModeInitialized()).toBe(true);
   });
 });
