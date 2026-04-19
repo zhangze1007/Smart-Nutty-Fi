@@ -24,6 +24,25 @@ const riskProfileDescriptions: Record<RiskProfileId, string> = {
   flexible: "Later checkpoints, while still pausing obvious scam or low-buffer transfers.",
 };
 
+const audienceSegments = [
+  {
+    title: "Students and young adults",
+    description: "Useful when a first-time transfer could leave too little room for bills or essentials.",
+  },
+  {
+    title: "Everyday wallet users",
+    description: "Adds a pause before rushed digital-money transfers to unfamiliar recipients or risky destinations.",
+  },
+  {
+    title: "Cautious or older users",
+    description: "Keeps the review step explicit, plain-language, and easier to read before money moves.",
+  },
+  {
+    title: "Financially stretched users",
+    description: "Shows when a transfer or planned spend may leave a thin remaining buffer after upcoming bills.",
+  },
+];
+
 export default function HomeView({
   onNavigate,
   riskProfile,
@@ -162,7 +181,7 @@ export default function HomeView({
           <p className="relative z-10 mb-6 max-w-[18rem] text-sm text-white/85">
             {demoState?.hasPersistentData
               ? "This screen includes previous demo activity. Reset to return to the clean judging baseline before recording."
-              : "Decision intervention before risky digital money moves, with clarity before action."}
+              : "Calmer transfer review for students, families, and everyday digital-money users before money moves."}
           </p>
 
           {demoState?.hasPersistentData && (
@@ -234,10 +253,25 @@ export default function HomeView({
           <div className="flex-1">
             <p className="text-sm font-medium text-nutty-text-main">Describe a money action</p>
             <p className="text-xs text-nutty-text-muted">
-              &quot;Review my Unifi bill&quot; or &quot;Transfer RM50 to Ali&quot;
+              &quot;Can I afford RM480 after bills?&quot; or &quot;Transfer RM50 to Ali&quot;
             </p>
           </div>
           <ArrowRight className="h-5 w-5 text-nutty-text-muted" />
+        </div>
+
+        <div>
+          <h3 className="mb-3 px-1 text-sm font-bold text-nutty-text-main">Who Nutty-Fi Helps</h3>
+          <div className="grid gap-3">
+            {audienceSegments.map((segment) => (
+              <div
+                key={segment.title}
+                className="rounded-2xl border border-nutty-border bg-nutty-card p-4 shadow-sm"
+              >
+                <p className="text-sm font-semibold text-nutty-text-main">{segment.title}</p>
+                <p className="mt-1 text-xs leading-5 text-nutty-text-muted">{segment.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div>
@@ -345,6 +379,9 @@ export default function HomeView({
                   onClick={() => onTextScaleChange("large")}
                 />
               </div>
+              <p className="mt-2 text-xs leading-5 text-nutty-text-muted">
+                Large text is a lightweight readability aid for smaller screens or more cautious family members reviewing Calm Mode together.
+              </p>
             </div>
           </div>
         </Card>

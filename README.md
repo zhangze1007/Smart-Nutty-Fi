@@ -13,7 +13,7 @@ This submission turns a natural-language money request into a structured action 
 
 ## Problem
 
-Digital money actions are fast, easy, and often irreversible. A risky transfer should not rely on a simple confirmation button when users may be sending money to an unknown payee, a high-risk destination, or from an already constrained balance. Users need reasoning, a deliberate pause, and a clear explanation before high-risk money moves go through.
+Digital money actions are fast, easy, and often irreversible. A risky transfer should not rely on a simple confirmation button when users may be sending money to an unknown payee, a high-risk destination, or from an already constrained balance. This matters for students managing a monthly allowance, everyday e-wallet users, cautious older family members, and anyone who may rush through a payment request on mobile.
 
 ## Solution
 
@@ -24,6 +24,13 @@ Nutty-Fi adds a decision-intervention layer before risky money movement:
 - Calm Mode intervention when a transfer needs review
 - policy-backed explanation with citations
 - explicit `Pause and review later` or `Continue and move money` decision flow
+
+## Who It Helps
+
+- students and young adults who need a clearer pause before sending money to a first-time payee
+- everyday e-wallet or banking-app users who may be pushed into rushed transfers
+- cautious or older users who want a plain-language checkpoint before confirming
+- financially vulnerable users who need to see whether a transfer leaves too little for upcoming bills
 
 ## Key Flows
 
@@ -51,6 +58,13 @@ This hackathon build prioritizes the judging-critical path:
 - reproducible demo reset flow
 - lightweight safety and accessibility controls on the home screen
 - minimal risk logging for key intervention outcomes
+
+## Inclusion Notes
+
+- Calm Mode keeps the decision explicit: pause or continue after review
+- rule explanations stay plain-language and short enough to scan on mobile
+- the home screen includes a large-text toggle as a lightweight readability aid for the demo
+- this MVP does not claim multilingual support, assisted reading, or broader accessibility coverage beyond those lightweight controls
 
 ## Core Flow
 

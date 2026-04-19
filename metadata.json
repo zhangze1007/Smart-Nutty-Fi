@@ -1,6 +1,6 @@
 {
   "name": "Nutty-Fi",
-  "description": "Decision-intervention fintech prototype that pauses risky digital money actions before funds move.",
+  "description": "Decision-intervention fintech prototype for everyday Malaysian users that pauses risky digital money actions before funds move.",
   "requestFramePermissions": [],
   "majorCapabilities": []
 }

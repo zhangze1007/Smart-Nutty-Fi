@@ -4,6 +4,13 @@
 
 Digital money actions happen fast, but risky transfers often still rely on a simple confirm button. Nutty-Fi adds a decision-intervention layer before money moves, so the user gets a pause, a reason, and a clearer review step before a risky transfer goes through.
 
+## Who this helps
+
+- students and young adults who are moving money from a tight monthly budget
+- everyday e-wallet or banking-app users facing a first-time or rushed payment request
+- cautious or older users who want a clearer checkpoint before confirming a transfer
+- financially vulnerable users who need a quick view of what remains after bills
+
 ## Why this is not a standard e-wallet warning
 
 Nutty-Fi does not show the same warning for every transfer. It:
@@ -35,6 +42,8 @@ Calm Mode is the checkpoint layer. It shows:
 - an explicit pause or continue decision
 
 The goal is to slow down risky money movement without blocking normal transfers unnecessarily.
+
+Nutty-Fi is not trying to solve every accessibility or financial-inclusion problem in one MVP. The current build keeps the scope narrow: plain-language explanations, a large-text option, and explicit pause-or-continue decisions before money moves.
 
 ## What Firestore stores
 

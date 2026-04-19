@@ -89,7 +89,8 @@ export default function ChatView({
     {
       id: "1",
       role: "assistant",
-      content: "Hi Alex! Tell me the money action you want to take. I'll help and pause risky transfers before they go through.",
+      content:
+        "Hi Alex! Tell me the money action you want to take. I can help slow down a risky transfer, review a bill request, or check if a spend still leaves enough for bills.",
     },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -280,7 +281,7 @@ export default function ChatView({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && handleSend()}
-            placeholder="Describe a transfer, bill review, or what-if check..."
+            placeholder="Describe a transfer, bill review, or affordability check..."
             className="h-12 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0"
           />
           <Button
@@ -294,6 +295,10 @@ export default function ChatView({
         </div>
         <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto px-1 pb-1">
           <SuggestionBadge text="Transfer RM50 to Ali" onClick={() => setInput("Transfer RM50 to Ali")} />
+          <SuggestionBadge
+            text="Check monthly buffer"
+            onClick={() => setInput("Can I afford RM480 after bills?")}
+          />
           <SuggestionBadge
             text="Review first-time payee"
             onClick={() => setInput("Transfer RM350 to New Seller")}
