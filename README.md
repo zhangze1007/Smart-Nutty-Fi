@@ -138,7 +138,7 @@ Risk logs written by the server:
 
 If Firestore is available but `appState/demo` is missing, the server seeds a reproducible baseline automatically. If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
 
-When previous demo transfers are still present, the home screen shows a demo-state explanation and a reset action so judges do not mistake persisted data for a broken balance.
+When previous demo transfers are still present, the home screen auto-resets to the seeded baseline on first load for a cleaner judging start and still keeps a manual reset action for the live demo flow.
 
 ## Setup Instructions
 
@@ -237,7 +237,7 @@ Current essential automated coverage includes:
 - structured risk rule hits
 - repo-seeded policy fallback and Firestore override
 - runtime dashboard fallback when Firestore reads fail
-- demo reset restoring the seeded baseline and flagging stale persisted demo data
+- demo reset restoring the seeded baseline and auto-resetting stale first-load demo data for judging
 
 ### Deploy Overview
 

@@ -15,6 +15,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { createMockDashboardData, mockDashboardData } from "@/data/mockTransactions";
 import { getDashboardData, resetDemoData } from "@/lib/dataProvider";
+import { markJudgeModeInitialized, readJudgeModeInitialized, shouldAutoResetDemo } from "@/lib/judgeMode";
 import type { RiskProfileId, TextScale } from "@/lib/types";
 
 const riskProfileDescriptions: Record<RiskProfileId, string> = {
@@ -49,10 +50,48 @@ export default function HomeView({
     let isMounted = true;
 
     getDashboardData()
-      .then((nextDashboard) => {
-        if (isMounted) {
-          setDashboard(nextDashboard);
+      .then(async (nextDashboard) => {
+        if (!isMounted) {
+          return;
         }
+
+        if (shouldAutoResetDemo(nextDashboard.demoState, readJudgeModeInitialized())) {
+          setIsResettingDemo(true);
+
+          try {
+            const resetDashboard = await resetDemoData();
+
+            if (!isMounted) {
+              return;
+            }
+
+            setDashboard(resetDashboard);
+            markJudgeModeInitialized();
+            setDemoResetFeedback({
+              tone: "success",
+              message: "Judge mode reset the demo to the seeded baseline on first load.",
+            });
+          } catch {
+            if (!isMounted) {
+              return;
+            }
+
+            setDashboard(nextDashboard);
+            setDemoResetFeedback({
+              tone: "error",
+              message: "Nutty found stale demo data on first load and could not auto-reset it. Use Reset demo before judging.",
+            });
+          } finally {
+            if (isMounted) {
+              setIsResettingDemo(false);
+            }
+          }
+
+          return;
+        }
+
+        setDashboard(nextDashboard);
+        markJudgeModeInitialized();
       })
       .catch(() => {
         // Keep fallback data if both Firestore and runtime snapshot fail.
@@ -70,6 +109,7 @@ export default function HomeView({
     try {
       const nextDashboard = await resetDemoData();
       setDashboard(nextDashboard);
+      markJudgeModeInitialized();
       setDemoResetFeedback({
         tone: "success",
         message: "Demo state reset to the seeded judging baseline.",
