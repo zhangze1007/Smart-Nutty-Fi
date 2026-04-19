@@ -107,13 +107,15 @@ export default function HomeView({
           <div className="absolute bottom-0 left-0 -mb-10 -ml-10 h-24 w-24 rounded-full bg-nutty-secondary/20 blur-2xl"></div>
 
           <p className="relative z-10 mb-2 text-sm text-white/80">
-            {demoState?.hasPersistentData ? "Current Demo Balance" : "Total Balance"}
+            {demoState?.hasPersistentData ? "Persisted Demo State" : "Total Balance"}
           </p>
           <h2 className="relative z-10 mb-4 text-4xl font-bold">
             RM {dashboard.currentBalance.toFixed(2)}
           </h2>
           <p className="relative z-10 mb-6 max-w-[18rem] text-sm text-white/85">
-            From chat to action, with a safety pause before high-risk money movement.
+            {demoState?.hasPersistentData
+              ? "This screen includes previous demo activity. Reset to return to the clean judging baseline before recording."
+              : "From chat to action, with a safety pause before high-risk money movement."}
           </p>
 
           {demoState?.hasPersistentData && (

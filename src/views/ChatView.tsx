@@ -73,10 +73,12 @@ function getRiskProfileLabel(riskProfile: RiskProfileId) {
 export default function ChatView({
   onRiskTrigger,
   transferEvent,
+  onTransferEventConsumed,
   riskProfile,
 }: {
   onRiskTrigger: (riskPrompt: RiskPrompt) => void;
   transferEvent: TransferResolutionEvent | null;
+  onTransferEventConsumed: () => void;
   riskProfile: RiskProfileId;
 }) {
   const [input, setInput] = useState("");
@@ -103,7 +105,8 @@ export default function ChatView({
       ...previousMessages,
       createAssistantMessage(transferEvent.response),
     ]);
-  }, [transferEvent]);
+    onTransferEventConsumed();
+  }, [onTransferEventConsumed, transferEvent]);
 
   const handleAssistantResponse = (response: AssistantResponse) => {
     setMessages((previousMessages) => [...previousMessages, createAssistantMessage(response)]);

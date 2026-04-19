@@ -130,6 +130,10 @@ export default function App() {
     });
   };
 
+  const clearTransferEvent = () => {
+    setTransferEvent(null);
+  };
+
   const confirmRiskyTransfer = async () => {
     if (!riskData) {
       return;
@@ -230,6 +234,7 @@ export default function App() {
             <ChatView
               onRiskTrigger={triggerRiskIntervention}
               transferEvent={transferEvent}
+              onTransferEventConsumed={clearTransferEvent}
               riskProfile={riskProfile}
             />
           )}
@@ -292,6 +297,10 @@ export default function App() {
                   </span>{" "}
                   profile.
                 </p>
+              </div>
+
+              <div className="mb-4 rounded-2xl border border-[#FED7AA] bg-[#FFF1E6] px-4 py-3 text-sm text-[#9A3412]">
+                No money moves until you choose whether to pause or continue after review.
               </div>
 
               <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/80 p-4">
