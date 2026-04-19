@@ -289,7 +289,7 @@ export default function App() {
                   Pause before sending.
                 </h2>
                 <p className="text-sm text-[#9A3412]">
-                  Nutty paused{" "}
+                  Nutty opened a review checkpoint for{" "}
                   <span className="font-semibold">RM{riskData.amount.toFixed(2)}</span> to{" "}
                   <span className="font-semibold">{riskData.recipient}</span> under the{" "}
                   <span className="font-semibold">
@@ -304,7 +304,7 @@ export default function App() {
               </div>
 
               <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/80 p-4">
-                <p className="mb-3 text-sm font-semibold text-[#9A3412]">Why Nutty intervened</p>
+                <p className="mb-3 text-sm font-semibold text-[#9A3412]">Why this transfer was paused</p>
                 <div className="flex flex-col gap-3">
                   {riskData.ruleHits.map((ruleHit) => (
                     <div
@@ -324,7 +324,7 @@ export default function App() {
               </div>
 
               <div className="rounded-2xl border border-[#FED7AA] bg-white/80 p-4">
-                <p className="mb-2 text-sm font-semibold text-[#9A3412]">Policy context</p>
+                <p className="mb-2 text-sm font-semibold text-[#9A3412]">Policy-backed context</p>
                 <p className="mb-3 text-sm text-[#7C2D12]">{riskData.policySummary}</p>
                 <div className="flex flex-col gap-2">
                   {riskData.citations.map((citation) => (

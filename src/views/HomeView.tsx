@@ -19,9 +19,9 @@ import { getDashboardData, resetDemoData } from "@/lib/dataProvider";
 import type { RiskProfileId, TextScale } from "@/lib/types";
 
 const riskProfileDescriptions: Record<RiskProfileId, string> = {
-  conservative: "Lower review thresholds for extra caution around unfamiliar transfers.",
-  balanced: "Recommended default for demo use: strong checks without interrupting every transfer.",
-  flexible: "Higher review thresholds, while still pausing obvious scam or low-balance cases.",
+  conservative: "Earlier decision checkpoints for unfamiliar or higher-risk money movement.",
+  balanced: "Recommended demo default: strong intervention on risky transfers without blocking routine ones.",
+  flexible: "Later checkpoints, while still pausing obvious scam or low-buffer transfers.",
 };
 
 export default function HomeView({
@@ -115,7 +115,7 @@ export default function HomeView({
           <p className="relative z-10 mb-6 max-w-[18rem] text-sm text-white/85">
             {demoState?.hasPersistentData
               ? "This screen includes previous demo activity. Reset to return to the clean judging baseline before recording."
-              : "From chat to action, with a safety pause before high-risk money movement."}
+              : "Decision intervention before risky digital money moves, with clarity before action."}
           </p>
 
           {demoState?.hasPersistentData && (
@@ -185,9 +185,9 @@ export default function HomeView({
             <Sparkles className="h-5 w-5" />
           </div>
           <div className="flex-1">
-            <p className="text-sm font-medium text-nutty-text-main">Ask Nutty...</p>
+            <p className="text-sm font-medium text-nutty-text-main">Describe a money action</p>
             <p className="text-xs text-nutty-text-muted">
-              &quot;Pay my Unifi bill&quot; or &quot;Transfer RM50&quot;
+              &quot;Pay my Unifi bill&quot; or &quot;Transfer RM50 to Ali&quot;
             </p>
           </div>
           <ArrowRight className="h-5 w-5 text-nutty-text-muted" />
@@ -207,16 +207,16 @@ export default function HomeView({
           <div className="border-b border-nutty-border bg-nutty-bg p-5">
             <div className="mb-1 flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-[#C2410C]" />
-              <h3 className="text-sm font-bold text-nutty-text-main">Safety & Accessibility</h3>
+              <h3 className="text-sm font-bold text-nutty-text-main">Intervention Controls</h3>
             </div>
             <p className="text-xs text-nutty-text-muted">
-              Lightweight controls for how strongly Nutty reviews risky transfers.
+              Choose how early Nutty steps in before risky money movement.
             </p>
           </div>
           <div className="space-y-5 p-5">
             <div>
               <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-nutty-text-muted">
-                Risk reminder level
+                Decision intervention profile
               </p>
               <div className="grid grid-cols-3 gap-2">
                 <SettingChip
@@ -290,11 +290,13 @@ export default function HomeView({
 
         <Card className="overflow-hidden border-none bg-nutty-card shadow-sm">
           <div className="border-b border-nutty-border bg-nutty-bg p-5">
-            <div className="mb-1 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-nutty-primary" />
-              <h3 className="text-sm font-bold text-nutty-text-main">What-If Simulator</h3>
-            </div>
-            <p className="text-xs text-nutty-text-muted">See how a purchase affects your month.</p>
+              <div className="mb-1 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-nutty-primary" />
+                <h3 className="text-sm font-bold text-nutty-text-main">What-If Simulator</h3>
+              </div>
+            <p className="text-xs text-nutty-text-muted">
+              Check your remaining buffer before you commit to a new spend.
+            </p>
           </div>
           <div className="p-5">
             <div className="mb-4">
@@ -325,7 +327,7 @@ export default function HomeView({
               </div>
               <div className="my-2 h-px bg-nutty-border"></div>
               <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-nutty-text-main">Estimated Left</span>
+                <span className="text-sm font-medium text-nutty-text-main">Estimated left before action</span>
                 <span
                   className={`text-lg font-bold ${
                     simulatedBalance < 500 ? "text-[#92400E]" : "text-nutty-safe"
@@ -339,8 +341,8 @@ export default function HomeView({
             {simulatedBalance < 500 && simulatorAmount && (
               <div className="mt-4 rounded-xl border border-nutty-warning-border bg-nutty-warning-bg p-3">
                 <p className="text-xs text-[#78350F]">
-                  <span className="font-semibold">Nutty says:</span> This leaves you a bit tight for
-                  the rest of the month. Consider delaying this purchase.
+                  <span className="font-semibold">Nutty says:</span> This leaves less room for bills
+                  and essentials. Consider pausing before you commit to this spend.
                 </p>
               </div>
             )}

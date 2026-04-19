@@ -87,7 +87,7 @@ export default function ChatView({
     {
       id: "1",
       role: "assistant",
-      content: "Hi Alex! I'm Nutty. How can I help you with your money today?",
+      content: "Hi Alex! Tell me the money action you want to take. I'll help and pause risky transfers before they go through.",
     },
   ]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -177,7 +177,7 @@ export default function ChatView({
         <div>
           <h2 className="text-base font-bold text-nutty-text-main">Nutty</h2>
           <p className="text-xs font-medium text-nutty-safe">
-            {isSending ? "Checking..." : `${getRiskProfileLabel(riskProfile)} profile active`}
+            {isSending ? "Checking for action and risk..." : `${getRiskProfileLabel(riskProfile)} intervention profile active`}
           </p>
         </div>
       </div>
@@ -208,7 +208,7 @@ export default function ChatView({
               {message.action?.type === "transfer" && (
                 <div className="mt-1 w-full animate-in slide-in-from-bottom-2 fade-in duration-300">
                   <div className="w-full max-w-[280px] rounded-2xl border border-nutty-border bg-nutty-card p-4 shadow-sm">
-                    <p className="mb-1 text-xs text-nutty-text-muted">Transfer to</p>
+                    <p className="mb-1 text-xs text-nutty-text-muted">Transfer request</p>
                     <p className="mb-2 text-sm font-medium text-nutty-text-main">
                       {message.action.data.recipient}
                     </p>
@@ -234,12 +234,12 @@ export default function ChatView({
                         }
                       >
                         <ShieldAlert className="h-4 w-4" />
-                        Review Calm Mode
+                        Open Calm Mode review
                       </Button>
                     ) : (
                       <Button className="flex h-10 w-full gap-2 rounded-xl" disabled>
                         <CheckCircle2 className="h-4 w-4" />
-                        Transfer Completed
+                        Money moved
                       </Button>
                     )}
                   </div>
@@ -257,7 +257,7 @@ export default function ChatView({
             value={input}
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && handleSend()}
-            placeholder="Type your request..."
+            placeholder="Describe a transfer, bill, or what-if check..."
             className="h-12 border-0 bg-transparent px-4 shadow-none focus-visible:ring-0"
           />
           <Button
@@ -273,7 +273,7 @@ export default function ChatView({
           <SuggestionBadge text="Pay Unifi bill" onClick={() => setInput("Pay my Unifi bill")} />
           <SuggestionBadge text="Transfer RM50 to Ali" onClick={() => setInput("Transfer RM50 to Ali")} />
           <SuggestionBadge
-            text="Transfer to Crypto"
+            text="Review crypto transfer"
             onClick={() => setInput("Transfer RM5000 to Crypto Exchange")}
           />
         </div>
