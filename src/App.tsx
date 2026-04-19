@@ -372,7 +372,7 @@ export default function App() {
               </div>
 
               <div className="rounded-2xl border border-[#FED7AA] bg-white/80 p-4">
-                <p className="mb-2 text-sm font-semibold text-[#9A3412]">Policy-backed context</p>
+                <p className="mb-2 text-sm font-semibold text-[#9A3412]">Malaysia policy context</p>
                 <p className="mb-3 text-sm text-[#7C2D12]">{riskData.policySummary}</p>
                 <div className="flex flex-col gap-2">
                   {riskData.citations.map((citation) => (
@@ -383,7 +383,9 @@ export default function App() {
                       rel="noreferrer"
                       className="flex items-center justify-between rounded-xl border border-[#FED7AA] bg-[#FFF7ED] px-3 py-2 text-left text-xs font-medium text-[#9A3412] transition-colors hover:bg-[#FFEDD5]"
                     >
-                      <span>{citation.title}</span>
+                      <span>
+                        {citation.title} • {citation.source}
+                      </span>
                       <ExternalLink className="h-3.5 w-3.5 shrink-0" />
                     </a>
                   ))}

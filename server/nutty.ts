@@ -525,11 +525,19 @@ function createCalmModeFallbackReply(input: {
   citations: PolicyCitation[];
 }) {
   const primaryReason = input.reasons[0] ?? "this transfer needs review";
-  const primaryCitation = input.citations[0]?.source ?? "official guidance";
+  const primaryCitation = formatCitationLabel(input.citations[0]);
 
   return `Nutty paused RM${input.amount.toFixed(
     2,
-  )} to ${input.recipient} because ${primaryReason}. Policy context: ${input.policySummary} Continue only if you have verified the recipient using ${primaryCitation}.`;
+  )} to ${input.recipient} because ${primaryReason}. Malaysia context: ${input.policySummary} Continue only if you have independently verified the recipient using ${primaryCitation}.`;
+}
+
+export function formatCitationLabel(citation?: PolicyCitation) {
+  if (!citation) {
+    return "Malaysia public guidance";
+  }
+
+  return `${citation.title} from ${citation.source}`;
 }
 
 export function createBillReviewReply(input: { biller: string; amount: number }) {
@@ -557,8 +565,9 @@ async function generateCalmModeReply(input: {
 You are Nutty-Fi's Calm Mode explainer.
 Write exactly 2 short sentences under 75 words total.
 Sentence 1: explain the strongest reason this transfer was paused.
-Sentence 2: give the policy-backed context in plain language and tell the user to continue only if they have verified the transfer.
+Sentence 2: give the Malaysian policy context in plain language, name the most relevant cited source briefly, and tell the user to continue only if they have independently verified the transfer.
 Be clear, calm, and specific.
+Do not imply legal advice, official approval, or full regulatory coverage.
 
 Transfer recipient: ${input.recipient}
 Transfer amount: RM${input.amount.toFixed(2)}

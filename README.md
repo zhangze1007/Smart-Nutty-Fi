@@ -2,7 +2,7 @@
 
 Nutty-Fi is a decision-intervention layer for risky digital money actions.
 
-This submission turns a natural-language money request into a structured action flow with server-side risk evaluation, Calm Mode intervention, policy-backed explanation, and an explicit pause-or-continue decision path. The current build keeps the Vite + React frontend, runs an Express + Gemini-backed backend, uses Firestore first with fallback preserved, and deploys as a single Cloud Run service.
+This submission turns a natural-language money request into a structured action flow with server-side risk evaluation, Calm Mode intervention, Malaysia-grounded policy context, and an explicit pause-or-continue decision path. The current build keeps the Vite + React frontend, runs an Express + Gemini-backed backend, uses Firestore first with fallback preserved, and deploys as a single Cloud Run service.
 
 ## Submission Snapshot
 
@@ -30,7 +30,7 @@ Nutty-Fi adds a decision-intervention layer before risky money movement:
 - Safe transfer: low-risk request moves through without Calm Mode interruption
 - Risky transfer with Calm Mode: server-side rules trigger a review checkpoint before money moves
 - What-if simulator: user can preview short-term balance impact before spending
-- Policy context: Calm Mode explanations are grounded in seeded or Firestore-backed policy snippets
+- Policy context: Calm Mode explanations are grounded in seeded or Firestore-backed Malaysia-specific policy snippets
 
 ## Architecture
 
@@ -86,17 +86,19 @@ Other review conditions:
 
 ## Policy Context
 
-Calm Mode explanations are grounded with a small seeded policy dataset in the repo. At runtime:
+Calm Mode explanations are grounded with a small Malaysia-focused policy dataset in the repo. At runtime:
 
 - server tries Firestore collection `policyDocuments` first
 - if no valid Firestore documents are available, server falls back to repo seeds
 
-Seeded documents are short paraphrased snippets with source labels and URLs, including:
+Seeded documents are short paraphrased Malaysia references with source labels and URLs, including:
 
-- Bank Negara Malaysia Museum and Art Gallery AMLA money-mule education
+- Bank Negara Malaysia money mule education
 - Bank Negara Malaysia Financial Consumer Alert List
 - Bank Negara Malaysia Financial Fraud Alert
-- Malaysia AMLA / Act 613 reference
+- Malaysia Act 613 AMLA reference
+
+These snippets support Calm Mode explanations and demo citations. They are not legal advice and do not mean Nutty-Fi performs a regulatory determination.
 
 ## API Surface
 

@@ -11,7 +11,7 @@ Nutty-Fi does not show the same warning for every transfer. It:
 - parses a natural-language request into a money action
 - runs deterministic server-side risk checks before transfer execution
 - adjusts review behavior by risk profile
-- explains the checkpoint with policy-backed context
+- explains the checkpoint with Malaysia-specific public policy context
 - gives the user a real pause-or-continue path that is logged
 
 ## Main transfer flow
@@ -51,7 +51,9 @@ If Firestore is unavailable, the app falls back to in-memory demo state so the p
 
 ## How policy context is used
 
-Policy context is not decorative copy. When a risky transfer is detected, the backend maps rule hits to policy topics, ranks seeded or Firestore-backed snippets, and uses those snippets to support the Calm Mode explanation and citations.
+Policy context is not decorative copy. When a risky transfer is detected, the backend maps rule hits to policy topics, ranks seeded or Firestore-backed Malaysia references, and uses those snippets to support the Calm Mode explanation and citations.
+
+The current policy set is intentionally lightweight and Malaysia-specific. It supports clearer explanations during review, but it is not a legal opinion or a full regulatory rules engine.
 
 ## Known MVP limitations
 

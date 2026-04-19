@@ -88,7 +88,7 @@ export default function TransactionsView() {
           </div>
           <p className="text-sm leading-6 text-nutty-text-main">
             Nutty is not a banner warning. It runs a server-side transfer review, checks the active
-            risk profile, and explains the checkpoint with policy-backed context before money moves.
+            risk profile, and explains the checkpoint with Malaysia-specific public reference context before money moves.
           </p>
         </div>
 
@@ -132,7 +132,7 @@ export default function TransactionsView() {
 
               <div className="rounded-2xl border border-nutty-border bg-nutty-bg p-4">
                 <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-[#9A3412]">
-                  Policy summary used in Calm Mode
+                  Malaysia policy summary used in Calm Mode
                 </p>
                 <p className="text-sm leading-6 text-nutty-text-main">
                   {policyContext.latestTriggeredReview.policySummary}
@@ -170,7 +170,7 @@ export default function TransactionsView() {
         <div className="rounded-3xl border border-nutty-border bg-nutty-card p-5 shadow-sm">
           <div className="mb-4 flex items-center gap-2">
             <ScrollText className="h-4 w-4 text-nutty-primary" />
-            <h2 className="text-sm font-bold text-nutty-text-main">Active policy source</h2>
+            <h2 className="text-sm font-bold text-nutty-text-main">Active Malaysia policy references</h2>
           </div>
           <p className="mb-4 text-xs uppercase tracking-wide text-[#9A3412]">
             {policyContext ? `Current runtime source: ${policyContext.source}` : "Runtime source unavailable"}
