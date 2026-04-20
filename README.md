@@ -317,6 +317,15 @@ Cloud Run validation after deploy:
 - Additional AI assistance, if any, was limited to support tasks such as code explanation, debugging suggestions, and refinement.
 - All final implementation decisions and submission materials were reviewed and understood by the team.
 
+## Build Journey
+
+- Initial ideation and early AI workflow were explored in Google AI Studio.
+- Main implementation and testing were carried out in Google Cloud Workstations.
+- Gemini was used for intent parsing and explanation generation.
+- Firebase Genkit was used to orchestrate backend action flows.
+- Firestore was used for runtime state, logs, and demo data.
+- The final prototype was deployed publicly on Google Cloud Run.
+
 ## Development & Deployment Evidence
 
 - Public GitHub repository: `https://github.com/zhangze1007/Smart-Nutty-Fi`
