@@ -7,9 +7,12 @@ import { cn } from "@/lib/utils";
 import type {
   AssistantResponse,
   PolicyCitation,
+  RecipientAssurance,
   RiskProfileId,
   RiskPrompt,
   RiskRuleHit,
+  RiskTriggerFlags,
+  RiskTriggerReason,
   TransferResolutionEvent,
 } from "@/lib/types";
 
@@ -30,8 +33,18 @@ type Message = {
         policySummary: string;
       riskLogId: string | null;
       appliedProfile: RiskProfileId;
+      triggerFlags: RiskTriggerFlags;
+      triggerReasons: RiskTriggerReason[];
+      recipientAssurance: RecipientAssurance | null;
     };
   };
+};
+
+const emptyTriggerFlags: RiskTriggerFlags = {
+  first_time_payee: false,
+  high_amount: false,
+  thin_buffer: false,
+  suspicious_destination: false,
 };
 
 function createAssistantMessage(response: AssistantResponse): Message {
@@ -54,6 +67,9 @@ function createAssistantMessage(response: AssistantResponse): Message {
               policySummary: response.calmMode?.policySummary ?? "",
               riskLogId: response.calmMode?.riskLogId ?? null,
               appliedProfile: response.calmMode?.appliedProfile ?? "balanced",
+              triggerFlags: response.calmMode?.triggerFlags ?? emptyTriggerFlags,
+              triggerReasons: response.calmMode?.triggerReasons ?? [],
+              recipientAssurance: response.calmMode?.recipientAssurance ?? null,
             },
           }
         : undefined,
@@ -125,6 +141,9 @@ export default function ChatView({
         policySummary: response.calmMode.policySummary,
         riskLogId: response.calmMode.riskLogId,
         appliedProfile: response.calmMode.appliedProfile,
+        triggerFlags: response.calmMode.triggerFlags,
+        triggerReasons: response.calmMode.triggerReasons,
+        recipientAssurance: response.calmMode.recipientAssurance,
       });
     }
   };
@@ -239,6 +258,18 @@ export default function ChatView({
                       RM {message.action.data.amount.toFixed(2)}
                     </p>
 
+                    {message.action.data.status === "requires_confirmation" &&
+                      message.action.data.recipientAssurance && (
+                        <div className="mb-3 rounded-xl border border-[#FED7AA] bg-[#FFF7ED] px-3 py-2">
+                          <p className="text-xs font-semibold text-[#7C2D12]">
+                            {message.action.data.recipientAssurance.label}
+                          </p>
+                          <p className="mt-1 text-[11px] leading-4 text-[#9A3412]">
+                            {message.action.data.recipientAssurance.guidance}
+                          </p>
+                        </div>
+                      )}
+
                     {message.action.data.status === "requires_confirmation" ? (
                       <Button
                         variant="destructive"
@@ -254,6 +285,9 @@ export default function ChatView({
                             policySummary: message.action!.data.policySummary,
                             riskLogId: message.action!.data.riskLogId,
                             appliedProfile: message.action!.data.appliedProfile,
+                            triggerFlags: message.action!.data.triggerFlags,
+                            triggerReasons: message.action!.data.triggerReasons,
+                            recipientAssurance: message.action!.data.recipientAssurance!,
                           })
                         }
                       >

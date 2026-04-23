@@ -1,14 +1,14 @@
 # Nutty-Fi
 
-Nutty-Fi is a decision-intervention layer for risky digital money actions.
+Nutty-Fi is an explainable pre-transfer intervention layer for selected high-risk transfer journeys.
 
-This submission turns a natural-language money request into a structured action flow with server-side risk evaluation, Calm Mode intervention, Malaysia-grounded policy context, and an explicit pause-or-continue decision path. The current build keeps the Vite + React frontend, runs an Express + Gemini-backed backend, uses Firestore first with fallback preserved, and deploys as a single Cloud Run service.
+This submission turns a natural-language transfer request into a structured pre-transfer review with deterministic server-side risk evaluation, recipient assurance cues, Calm Mode cooling-off actions, Malaysia-grounded policy context, and logged pause-or-continue outcomes. Gemini is used only to explain already-determined rule reasons in plain language; it is not the decision engine. The current build keeps the Vite + React frontend, runs an Express + Gemini-backed backend, uses Firestore first with fallback preserved, and deploys as a single Cloud Run service.
 
 ## Submission Snapshot
 
-- Focus: safer money movement before risky transfers are completed
+- Focus: safer money movement before selected risky transfers are completed
 - Core differentiator: structured intervention instead of a generic confirmation banner
-- Demo path: safe transfer, risky transfer, what-if simulator, policy context
+- Demo path: safe transfer, risky transfer with Calm Mode, outcome metrics, policy context
 - Deployment model: one Cloud Run service serving both API routes and the built SPA
 
 ## Problem
@@ -17,13 +17,16 @@ Digital money actions are fast, easy, and often irreversible. A risky transfer s
 
 ## Solution
 
-Nutty-Fi adds a decision-intervention layer before risky money movement:
+Nutty-Fi adds a pre-transfer intervention layer before selected risky money movement:
 
-- natural-language money actions for transfer, bill review, and what-if intents
+- natural-language transfer requests with secondary bill-review and what-if support
 - deterministic server-side risk evaluation
-- Calm Mode intervention when a transfer needs review
+- recipient assurance cues for known vs not previously verified payees
+- Calm Mode cooling-off actions when a transfer needs review
 - Malaysia-grounded policy explanation with citations
-- explicit `Pause and review later` or `Continue and move money` decision flow
+- explicit `Pause for now`, `Verify recipient independently`, or `Continue transfer` decision flow
+
+Nutty-Fi is not a fraud oracle, a full fraud engine, a hard scam-account blocker, or a live bank/e-wallet integration.
 
 ## Who It Helps
 
@@ -53,12 +56,13 @@ Nutty-Fi is still an MVP, so the credible adoption story is narrow:
 - E-wallet safety layer: the current flow can sit in front of a transfer confirmation step as a review layer for higher-risk sends, especially first-time payees or suspicious destinations.
 - Banking or sandbox integration path: a next step would be connecting the same checkpoint logic to sandbox transaction APIs or payee-verification signals while keeping the ledger and settlement system outside this product.
 - Premium safety or coaching layer: the existing risk profiles, Calm Mode history, and what-if checks could support an optional paid safety tier for users who want stronger guardrails or more deliberate money coaching.
-- Fraud-prevention analytics path: the current MVP already logs triggered, confirmed, and cancelled interventions. A realistic next layer would summarize those events for product or risk teams instead of claiming full fraud detection coverage.
+- Intervention analytics path: the current MVP logs triggered, paused, and continued interventions. A realistic next layer would summarize those events for product or risk teams instead of claiming full fraud detection coverage.
 
 What this build does not claim today:
 
 - live bank or e-wallet integrations
 - real payment execution outside the demo runtime
+- hard scam-account blocking or fraud certainty
 - bank-grade fraud scoring or case management
 - production-scale analytics infrastructure
 
@@ -68,12 +72,21 @@ This hackathon build prioritizes the judging-critical path:
 
 - config-driven risk rules instead of hardcoded thresholds
 - structured Calm Mode reasons with policy citations
+- recipient assurance cues without claiming fraud proof
 - repo-seeded policy snippets with Firestore override support
 - Firestore-first runtime with fallback preserved
-- explicit `Pause and review later` / `Continue and move money` path
+- explicit `Pause for now` / `Verify recipient independently` / `Continue transfer` path
 - reproducible demo reset flow
 - lightweight safety and accessibility controls on the home screen
-- minimal risk logging for key intervention outcomes
+- lightweight outcome metrics for triggered, paused, and continued interventions
+
+## Pilot Readiness
+
+- Narrow scope: Calm Mode is aimed at selected transfer journeys such as first-time high-value payees, suspicious destination categories, and transfers that leave a thin short-term cash buffer.
+- Deterministic decisioning: server-side rules trigger Calm Mode; GenAI only rewrites rule-backed reasons into clearer explanation copy.
+- Recipient assurance: the demo distinguishes known payees from recipients not previously verified and asks users to verify independently.
+- Behavioural measurement: logs track `risk_triggered`, `risk_paused`, `risk_continued`, trigger reasons, and trigger flags so the demo can show intervention count, pause rate, continue rate, and top trigger reasons.
+- Non-claims: this prototype does not prove fraud, block real accounts, execute real bank transfers, or replace production fraud operations.
 
 ## Inclusion Notes
 
@@ -165,10 +178,10 @@ Firestore-first collections/documents used by this build:
 Risk logs written by the server:
 
 - `risk_triggered`
-- `risk_confirmed`
-- `risk_cancelled`
+- `risk_paused`
+- `risk_continued`
 
-These events are enough to support a demo dashboard, explain intervention outcomes, and illustrate how an eventual product team could review checkpoint behavior. They are not a substitute for a production fraud-monitoring pipeline.
+Each triggered log also carries trigger reason(s), the `first_time_payee`, `high_amount`, `thin_buffer`, and `suspicious_destination` flags, and recipient assurance wording. These events are enough to support a demo metrics block, explain intervention outcomes, and illustrate how an eventual product team could review checkpoint behavior. They are not a substitute for a production fraud-monitoring pipeline.
 
 If Firestore is available but `appState/demo` is missing, the server seeds a reproducible baseline automatically. If Firestore initialization or operations fail, the app preserves demo continuity with in-memory fallback.
 
@@ -303,12 +316,13 @@ Cloud Run validation after deploy:
 1. Open the home screen and show the safety controls.
 2. Keep `Balanced` risk profile selected.
 3. In chat, send `Transfer RM5000 to Crypto Exchange`.
-4. Show Calm Mode reasons, rule hits, and policy citations.
-5. Click `Pause and review later` to show that no money moves and the decision is logged.
-6. Retry the transfer and click `Continue and move money`.
-7. Show the successful transfer response.
-8. Use `Reset demo` if needed to restore the seeded baseline.
-9. Call `/api/health` to show runtime status and configuration source.
+4. Show Calm Mode reasons, recipient assurance, rule hits, and policy citations.
+5. Click `Verify recipient independently` to show the cooling-off guidance.
+6. Click `Pause for now` to show that no money moves and the decision is logged.
+7. Retry the transfer and click `Continue transfer`.
+8. Show the successful transfer response and the outcome metrics block.
+9. Use `Reset demo` if needed to restore the seeded baseline.
+10. Call `/api/health` to show runtime status and configuration source.
 
 ## AI Tooling Disclosure
 

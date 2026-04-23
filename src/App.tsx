@@ -1,5 +1,13 @@
 import React, { useEffect, useState } from "react";
-import { Home, MessageSquare, ScrollText, ShieldAlert, PauseCircle, ExternalLink } from "lucide-react";
+import {
+  Home,
+  MessageSquare,
+  ScrollText,
+  ShieldAlert,
+  PauseCircle,
+  ExternalLink,
+  ShieldCheck,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type {
@@ -81,6 +89,7 @@ export default function App() {
   const [riskData, setRiskData] = useState<RiskPrompt | null>(null);
   const [isConfirmingRisk, setIsConfirmingRisk] = useState(false);
   const [isCancellingRisk, setIsCancellingRisk] = useState(false);
+  const [isVerificationGuidanceVisible, setIsVerificationGuidanceVisible] = useState(false);
   const [transferEvent, setTransferEvent] = useState<TransferResolutionEvent | null>(null);
   const [riskProfile, setRiskProfile] = useState<RiskProfileId>(() => readStoredRiskProfile());
   const [textScale, setTextScale] = useState<TextScale>(() => readStoredTextScale());
@@ -124,6 +133,7 @@ export default function App() {
 
   const triggerRiskIntervention = (nextRiskData: RiskPrompt) => {
     setRiskData(nextRiskData);
+    setIsVerificationGuidanceVisible(false);
     setIsRiskModalOpen(true);
   };
 
@@ -158,6 +168,8 @@ export default function App() {
           riskProfile: riskData.appliedProfile,
           riskLogId: riskData.riskLogId,
           ruleCodes: riskData.ruleHits.map((ruleHit) => ruleHit.code),
+          triggerFlags: riskData.triggerFlags,
+          triggerReasons: riskData.triggerReasons,
         }),
       });
 
@@ -176,6 +188,7 @@ export default function App() {
       setIsConfirmingRisk(false);
       setIsRiskModalOpen(false);
       setRiskData(null);
+      setIsVerificationGuidanceVisible(false);
       setCurrentView("chat");
     }
   };
@@ -199,6 +212,8 @@ export default function App() {
           riskProfile: riskData.appliedProfile,
           riskLogId: riskData.riskLogId,
           ruleCodes: riskData.ruleHits.map((ruleHit) => ruleHit.code),
+          triggerFlags: riskData.triggerFlags,
+          triggerReasons: riskData.triggerReasons,
         }),
       });
 
@@ -217,6 +232,7 @@ export default function App() {
       setIsCancellingRisk(false);
       setIsRiskModalOpen(false);
       setRiskData(null);
+      setIsVerificationGuidanceVisible(false);
       setCurrentView("chat");
     }
   };
@@ -322,6 +338,21 @@ export default function App() {
                 No money moves until you choose whether to pause or continue after review.
               </div>
 
+              <div className="mb-4 rounded-2xl border border-[#FDBA74] bg-white/85 p-4">
+                <div className="mb-2 flex items-center gap-2">
+                  <ShieldCheck className="h-4 w-4 text-[#C2410C]" />
+                  <p className="text-sm font-semibold text-[#7C2D12]">
+                    {riskData.recipientAssurance.label}
+                  </p>
+                </div>
+                <p className="text-sm leading-5 text-[#9A3412]">
+                  {riskData.recipientAssurance.detail}
+                </p>
+                <p className="mt-2 text-sm leading-5 text-[#7C2D12]">
+                  {riskData.recipientAssurance.guidance}
+                </p>
+              </div>
+
               <div className="mb-4 grid grid-cols-3 gap-3">
                 <div className="rounded-2xl border border-[#FED7AA] bg-white/80 px-3 py-3 text-center">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#C2410C]">
@@ -391,6 +422,19 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {isVerificationGuidanceVisible && (
+                <div className="mt-4 rounded-2xl border border-[#FDBA74] bg-[#FFF1E6] p-4">
+                  <p className="mb-2 text-sm font-semibold text-[#7C2D12]">
+                    Independent verification checklist
+                  </p>
+                  <div className="flex flex-col gap-2 text-sm leading-5 text-[#9A3412]">
+                    <p>Use the bank, wallet, merchant, or beneficiary details from an official app or website.</p>
+                    <p>Do not rely on a phone number, link, or account detail from the message that requested this transfer.</p>
+                    <p>If you feel pressured or rushed, pause now and contact support before sending money.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="sticky bottom-0 shrink-0 border-t border-[#FED7AA] bg-[#FFF7ED] px-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] pt-4 shadow-[0_-12px_24px_rgba(124,45,18,0.08)]">
@@ -401,14 +445,22 @@ export default function App() {
                   className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#FDBA74] bg-white font-medium text-[#9A3412] transition-colors hover:bg-[#FFF1E6] disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   <PauseCircle className="h-4 w-4" />
-                  {isCancellingRisk ? "Pausing..." : "Pause and review later"}
+                  {isCancellingRisk ? "Pausing..." : "Pause for now"}
+                </button>
+                <button
+                  onClick={() => setIsVerificationGuidanceVisible(true)}
+                  disabled={isCancellingRisk || isConfirmingRisk}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl border border-[#FDBA74] bg-[#FFF1E6] font-medium text-[#7C2D12] transition-colors hover:bg-[#FFEDD5] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  Verify recipient independently
                 </button>
                 <button
                   onClick={confirmRiskyTransfer}
                   disabled={isConfirmingRisk || isCancellingRisk}
                   className="h-14 w-full rounded-2xl bg-[#9A3412] font-medium text-white transition-colors hover:bg-[#7C2D12] disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {isConfirmingRisk ? "Confirming transfer..." : "Continue and move money"}
+                  {isConfirmingRisk ? "Continuing transfer..." : "Continue transfer"}
                 </button>
               </div>
             </div>

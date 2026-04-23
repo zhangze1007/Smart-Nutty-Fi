@@ -22,6 +22,22 @@ export type RiskRuleHit = {
   policyTopics: string[];
 };
 
+export type RiskTriggerFlags = {
+  first_time_payee: boolean;
+  high_amount: boolean;
+  thin_buffer: boolean;
+  suspicious_destination: boolean;
+};
+
+export type RiskTriggerReason = keyof RiskTriggerFlags;
+
+export type RecipientAssurance = {
+  status: "known_payee" | "not_previously_verified";
+  label: string;
+  detail: string;
+  guidance: string;
+};
+
 export type AssistantResponse = {
   reply: string;
   intent: AssistantIntent;
@@ -40,6 +56,9 @@ export type AssistantResponse = {
     citations: PolicyCitation[];
     riskLogId: string | null;
     appliedProfile: RiskProfileId;
+    triggerFlags: RiskTriggerFlags;
+    triggerReasons: RiskTriggerReason[];
+    recipientAssurance: RecipientAssurance;
   };
   confirmation: null | {
     recipient: string;
@@ -62,6 +81,9 @@ export type RiskPrompt = {
   policySummary: string;
   riskLogId: string | null;
   appliedProfile: RiskProfileId;
+  triggerFlags: RiskTriggerFlags;
+  triggerReasons: RiskTriggerReason[];
+  recipientAssurance: RecipientAssurance;
 };
 
 export type PolicyDocumentSummary = {
@@ -86,5 +108,19 @@ export type PolicyContextData = {
     ruleHits: RiskRuleHit[];
     policySummary: string;
     citations: PolicyCitation[];
+    triggerReasons: RiskTriggerReason[];
+    triggerFlags: RiskTriggerFlags;
+    recipientAssurance?: RecipientAssurance;
+  };
+  interventionMetrics: {
+    interventionCount: number;
+    pauseCount: number;
+    continueCount: number;
+    pauseRate: number;
+    continueRate: number;
+    topTriggerReasons: Array<{
+      reason: RiskTriggerReason;
+      count: number;
+    }>;
   };
 };

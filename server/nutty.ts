@@ -7,7 +7,12 @@ import {
   normalizeRiskProfileId,
   resolveRiskConfig,
 } from "./config/riskConfig.js";
-import { assessTransferRisk, isRiskRuleCode } from "./lib/risk.js";
+import {
+  assessTransferRisk,
+  isRiskRuleCode,
+  type RiskTriggerFlags,
+  type RiskTriggerReason,
+} from "./lib/risk.js";
 import {
   getAccountSnapshot,
   getPolicyDataSource,
@@ -46,6 +51,27 @@ const RiskRuleHitSchema = z.object({
   policyTopics: z.array(z.string()),
 });
 
+const RiskTriggerFlagsSchema = z.object({
+  first_time_payee: z.boolean(),
+  high_amount: z.boolean(),
+  thin_buffer: z.boolean(),
+  suspicious_destination: z.boolean(),
+});
+
+const RiskTriggerReasonSchema = z.enum([
+  "first_time_payee",
+  "high_amount",
+  "thin_buffer",
+  "suspicious_destination",
+]);
+
+const RecipientAssuranceSchema = z.object({
+  status: z.enum(["known_payee", "not_previously_verified"]),
+  label: z.string(),
+  detail: z.string(),
+  guidance: z.string(),
+});
+
 const AssistantResponseSchema = z.object({
   reply: z.string(),
   intent: z.enum(["transfer_money", "pay_bill", "calculate_cashflow", "unknown"]),
@@ -67,6 +93,9 @@ const AssistantResponseSchema = z.object({
       citations: z.array(PolicyCitationSchema),
       riskLogId: z.string().nullable(),
       appliedProfile: RiskProfileSchema,
+      triggerFlags: RiskTriggerFlagsSchema,
+      triggerReasons: z.array(RiskTriggerReasonSchema),
+      recipientAssurance: RecipientAssuranceSchema,
     })
     .nullable(),
   confirmation: z
@@ -156,6 +185,9 @@ const riskCheckTool = ai.defineTool(
       ruleHits: z.array(RiskRuleHitSchema),
       projectedRemainingBalance: z.number(),
       knownPayee: z.boolean(),
+      triggerFlags: RiskTriggerFlagsSchema,
+      triggerReasons: z.array(RiskTriggerReasonSchema),
+      recipientAssurance: RecipientAssuranceSchema,
       appliedProfile: RiskProfileSchema,
       thresholds: z.object({
         maxTransferWithoutConfirm: z.number(),
@@ -524,13 +556,14 @@ function createCalmModeFallbackReply(input: {
   reasons: string[];
   policySummary: string;
   citations: PolicyCitation[];
+  recipientAssurance: { label: string; guidance: string };
 }) {
   const primaryReason = input.reasons[0] ?? "this transfer needs review";
   const primaryCitation = formatCitationLabel(input.citations[0]);
 
   return `Nutty paused RM${input.amount.toFixed(
     2,
-  )} to ${input.recipient} because ${primaryReason}. Malaysia context: ${input.policySummary} Continue only if you have independently verified the recipient using ${primaryCitation}.`;
+  )} to ${input.recipient} because ${primaryReason}. ${input.recipientAssurance.label}: ${input.recipientAssurance.guidance} Malaysia context: ${primaryCitation}.`;
 }
 
 export function formatCitationLabel(citation?: PolicyCitation) {
@@ -553,6 +586,7 @@ async function generateCalmModeReply(input: {
   reasons: string[];
   policySummary: string;
   citations: PolicyCitation[];
+  recipientAssurance: { label: string; detail: string; guidance: string };
   explanationTone: "cautious" | "balanced" | "light";
 }) {
   if (!geminiConfigured) {
@@ -566,15 +600,18 @@ async function generateCalmModeReply(input: {
 You are Nutty-Fi's Calm Mode explainer.
 Write exactly 2 short sentences under 75 words total.
 Sentence 1: explain the strongest reason this transfer was paused.
-Sentence 2: give the Malaysian policy context in plain language, name the most relevant cited source briefly, and tell the user to continue only if they have independently verified the transfer.
+Sentence 2: include the recipient assurance cue, name the most relevant cited source briefly, and tell the user to continue only after independent verification.
 Be clear, calm, and specific.
-Do not imply legal advice, official approval, or full regulatory coverage.
+Do not imply legal advice, official approval, fraud certainty, or full regulatory coverage.
 
 Transfer recipient: ${input.recipient}
 Transfer amount: RM${input.amount.toFixed(2)}
 Explanation tone: ${input.explanationTone}
 Risk reasons:
 ${input.reasons.map((reason) => `- ${reason}`).join("\n")}
+
+Recipient assurance:
+${input.recipientAssurance.label}: ${input.recipientAssurance.detail} ${input.recipientAssurance.guidance}
 
 Policy summary:
 ${input.policySummary}
@@ -658,6 +695,7 @@ export const assistantFlow = ai.defineFlow(
           reasons: riskCheck.result.reasons,
           policySummary: policySearch.result.summary,
           citations: policySearch.result.citations,
+          recipientAssurance: riskCheck.result.recipientAssurance,
           explanationTone: activeConfig.explanationTone,
         });
 
@@ -669,6 +707,9 @@ export const assistantFlow = ai.defineFlow(
           riskProfile: riskCheck.result.appliedProfile,
           message: reply,
           ruleHits: riskCheck.result.ruleHits,
+          triggerReasons: riskCheck.result.triggerReasons,
+          triggerFlags: riskCheck.result.triggerFlags,
+          recipientAssurance: riskCheck.result.recipientAssurance,
           policySummary: policySearch.result.summary,
           citations: policySearch.result.citations,
         });
@@ -693,6 +734,9 @@ export const assistantFlow = ai.defineFlow(
             citations: policySearch.result.citations,
             riskLogId: riskLog.id,
             appliedProfile: riskCheck.result.appliedProfile,
+            triggerFlags: riskCheck.result.triggerFlags,
+            triggerReasons: riskCheck.result.triggerReasons,
+            recipientAssurance: riskCheck.result.recipientAssurance,
           },
           confirmation: {
             recipient: parsedIntent.recipient,
@@ -788,6 +832,8 @@ export async function confirmTransfer(input: {
   acknowledgedRisk: boolean;
   riskLogId?: string | null;
   ruleCodes?: string[];
+  triggerFlags?: RiskTriggerFlags;
+  triggerReasons?: RiskTriggerReason[];
   riskProfile?: string | null;
 }): Promise<AssistantResponse> {
   if (!input.acknowledgedRisk) {
@@ -807,12 +853,14 @@ export async function confirmTransfer(input: {
   }
 
   await recordRiskLog({
-    eventType: "risk_confirmed",
+    eventType: "risk_continued",
     recipient: input.recipient,
     amount: input.amount,
     ruleCodes: (input.ruleCodes ?? []).filter(isRiskRuleCode),
     riskProfile: transferResult.result.appliedProfile,
     relatedRiskLogId: input.riskLogId ?? undefined,
+    triggerFlags: input.triggerFlags,
+    triggerReasons: input.triggerReasons,
     message: "User reviewed Calm Mode and continued with the transfer.",
   });
 
@@ -835,17 +883,21 @@ export async function cancelTransfer(input: {
   amount: number;
   riskLogId?: string | null;
   ruleCodes?: string[];
+  triggerFlags?: RiskTriggerFlags;
+  triggerReasons?: RiskTriggerReason[];
   riskProfile?: string | null;
 }): Promise<AssistantResponse> {
   const config = resolveRiskConfig(await loadRiskConfig(), resolveRequestedProfile(input.riskProfile));
 
   await recordRiskLog({
-    eventType: "risk_cancelled",
+    eventType: "risk_paused",
     recipient: input.recipient,
     amount: input.amount,
     ruleCodes: (input.ruleCodes ?? []).filter(isRiskRuleCode),
     riskProfile: config.requestedProfile,
     relatedRiskLogId: input.riskLogId ?? undefined,
+    triggerFlags: input.triggerFlags,
+    triggerReasons: input.triggerReasons,
     message: "User paused the transfer instead of continuing immediately.",
   });
 

@@ -14,12 +14,28 @@ import {
 } from "../../src/data/mockTransactions.js";
 import { policySeedDocuments, type PolicyDocument } from "../data/policySeeds.js";
 import type { RiskProfileId } from "../config/riskConfig.js";
-import { isRiskRuleCode, type RiskRuleCode, type RiskRuleHit } from "./risk.js";
+import {
+  getTriggerFlagsFromRuleCodes,
+  getTriggerReasonsFromFlags,
+  isRiskRuleCode,
+  type RecipientAssurance,
+  type RiskRuleCode,
+  type RiskRuleHit,
+  type RiskTriggerFlags,
+  type RiskTriggerReason,
+} from "./risk.js";
 import { getAdminFirestore } from "./firebaseAdmin.js";
 
 export type RuntimeDataMode = "firestore" | "memory";
 export type PolicyDataSource = "firestore" | "seed";
-export type RiskLogEventType = "risk_triggered" | "risk_confirmed" | "risk_cancelled";
+export type RiskLogEventType =
+  | "risk_triggered"
+  | "risk_paused"
+  | "risk_continued"
+  | "risk_confirmed"
+  | "risk_cancelled";
+
+type NormalizedRiskLogEventType = "risk_triggered" | "risk_paused" | "risk_continued";
 
 export type PolicyCitation = {
   title: string;
@@ -31,7 +47,7 @@ type AccountSnapshot = Pick<DashboardData, "currentBalance" | "upcomingBills" | 
 
 type RiskLogEntry = {
   id: string;
-  eventType: RiskLogEventType;
+  eventType: NormalizedRiskLogEventType;
   recipient: string;
   amount: number;
   ruleCodes: RiskRuleCode[];
@@ -40,8 +56,32 @@ type RiskLogEntry = {
   relatedRiskLogId?: string;
   message?: string;
   ruleHits?: RiskRuleHit[];
+  triggerReasons: RiskTriggerReason[];
+  triggerFlags: RiskTriggerFlags;
+  first_time_payee: boolean;
+  high_amount: boolean;
+  thin_buffer: boolean;
+  suspicious_destination: boolean;
+  recipientAssurance?: RecipientAssurance;
   policySummary?: string;
   citations?: PolicyCitation[];
+};
+
+type RiskLogInput = Omit<
+  RiskLogEntry,
+  | "id"
+  | "createdAt"
+  | "eventType"
+  | "triggerReasons"
+  | "triggerFlags"
+  | "first_time_payee"
+  | "high_amount"
+  | "thin_buffer"
+  | "suspicious_destination"
+> & {
+  eventType: RiskLogEventType;
+  triggerReasons?: RiskTriggerReason[];
+  triggerFlags?: RiskTriggerFlags;
 };
 
 type SimulationEvent = {
@@ -57,6 +97,18 @@ type PolicySearchResult = {
   summary: string;
   citations: PolicyCitation[];
   source: PolicyDataSource;
+};
+
+export type InterventionMetrics = {
+  interventionCount: number;
+  pauseCount: number;
+  continueCount: number;
+  pauseRate: number;
+  continueRate: number;
+  topTriggerReasons: Array<{
+    reason: RiskTriggerReason;
+    count: number;
+  }>;
 };
 
 export type PolicyContextSnapshot = {
@@ -79,7 +131,11 @@ export type PolicyContextSnapshot = {
     ruleHits: RiskRuleHit[];
     policySummary: string;
     citations: PolicyCitation[];
+    triggerReasons: RiskTriggerReason[];
+    triggerFlags: RiskTriggerFlags;
+    recipientAssurance?: RecipientAssurance;
   };
+  interventionMetrics: InterventionMetrics;
 };
 
 const DEMO_STATE_DOCUMENT_PATH = "appState/demo";
@@ -400,18 +456,104 @@ function normalizeRiskRuleHit(value: unknown): RiskRuleHit | null {
   };
 }
 
+function normalizeRiskLogEventType(value: unknown): NormalizedRiskLogEventType | null {
+  if (value === "risk_triggered" || value === "risk_paused" || value === "risk_continued") {
+    return value;
+  }
+
+  if (value === "risk_confirmed") {
+    return "risk_continued";
+  }
+
+  if (value === "risk_cancelled") {
+    return "risk_paused";
+  }
+
+  return null;
+}
+
+function isRiskTriggerReason(value: unknown): value is RiskTriggerReason {
+  return (
+    value === "first_time_payee" ||
+    value === "high_amount" ||
+    value === "thin_buffer" ||
+    value === "suspicious_destination"
+  );
+}
+
+function normalizeTriggerFlags(
+  record: Record<string, unknown>,
+  ruleCodes: RiskRuleCode[],
+): RiskTriggerFlags {
+  const nestedFlags =
+    record.triggerFlags && typeof record.triggerFlags === "object"
+      ? (record.triggerFlags as Record<string, unknown>)
+      : null;
+  const flatFlags = record;
+  const flagSource = nestedFlags ?? flatFlags;
+
+  if (
+    typeof flagSource.first_time_payee === "boolean" &&
+    typeof flagSource.high_amount === "boolean" &&
+    typeof flagSource.thin_buffer === "boolean" &&
+    typeof flagSource.suspicious_destination === "boolean"
+  ) {
+    return {
+      first_time_payee: flagSource.first_time_payee,
+      high_amount: flagSource.high_amount,
+      thin_buffer: flagSource.thin_buffer,
+      suspicious_destination: flagSource.suspicious_destination,
+    };
+  }
+
+  return getTriggerFlagsFromRuleCodes(ruleCodes);
+}
+
+function normalizeTriggerReasons(
+  record: Record<string, unknown>,
+  triggerFlags: RiskTriggerFlags,
+): RiskTriggerReason[] {
+  if (Array.isArray(record.triggerReasons)) {
+    const triggerReasons = record.triggerReasons.filter(isRiskTriggerReason);
+
+    if (triggerReasons.length) {
+      return triggerReasons;
+    }
+  }
+
+  return getTriggerReasonsFromFlags(triggerFlags);
+}
+
+function normalizeRecipientAssurance(value: unknown): RecipientAssurance | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    (record.status !== "known_payee" && record.status !== "not_previously_verified") ||
+    typeof record.label !== "string" ||
+    typeof record.detail !== "string" ||
+    typeof record.guidance !== "string"
+  ) {
+    return undefined;
+  }
+
+  return {
+    status: record.status,
+    label: record.label,
+    detail: record.detail,
+    guidance: record.guidance,
+  };
+}
+
 function normalizeRiskLog(id: string, value: unknown): RiskLogEntry | null {
   if (!value || typeof value !== "object") {
     return null;
   }
 
   const record = value as Record<string, unknown>;
-  const eventType =
-    record.eventType === "risk_triggered" ||
-    record.eventType === "risk_confirmed" ||
-    record.eventType === "risk_cancelled"
-      ? record.eventType
-      : null;
+  const eventType = normalizeRiskLogEventType(record.eventType);
   const riskProfile =
     record.riskProfile === "conservative" ||
     record.riskProfile === "balanced" ||
@@ -431,12 +573,15 @@ function normalizeRiskLog(id: string, value: unknown): RiskLogEntry | null {
     return null;
   }
 
+  const ruleCodes = record.ruleCodes.filter((code): code is RiskRuleCode => isRiskRuleCode(code));
+  const triggerFlags = normalizeTriggerFlags(record, ruleCodes);
+
   return {
     id,
     eventType,
     recipient: record.recipient,
     amount: record.amount,
-    ruleCodes: record.ruleCodes.filter((code): code is RiskRuleCode => isRiskRuleCode(code)),
+    ruleCodes,
     riskProfile,
     createdAt: record.createdAt,
     relatedRiskLogId:
@@ -447,6 +592,13 @@ function normalizeRiskLog(id: string, value: unknown): RiskLogEntry | null {
           .map((ruleHit: unknown) => normalizeRiskRuleHit(ruleHit))
           .filter((ruleHit): ruleHit is RiskRuleHit => ruleHit !== null)
       : undefined,
+    triggerReasons: normalizeTriggerReasons(record, triggerFlags),
+    triggerFlags,
+    first_time_payee: triggerFlags.first_time_payee,
+    high_amount: triggerFlags.high_amount,
+    thin_buffer: triggerFlags.thin_buffer,
+    suspicious_destination: triggerFlags.suspicious_destination,
+    recipientAssurance: normalizeRecipientAssurance(record.recipientAssurance),
     policySummary: typeof record.policySummary === "string" ? record.policySummary : undefined,
     citations: Array.isArray(record.citations)
       ? record.citations
@@ -468,11 +620,39 @@ function findLatestTriggeredReview(logs: RiskLogEntry[]) {
     .sort((left, right) => right.createdAt.localeCompare(left.createdAt))[0] ?? null;
 }
 
+function createInterventionMetrics(logs: RiskLogEntry[]): InterventionMetrics {
+  const triggeredLogs = logs.filter((log) => log.eventType === "risk_triggered");
+  const interventionCount = triggeredLogs.length;
+  const pauseCount = logs.filter((log) => log.eventType === "risk_paused").length;
+  const continueCount = logs.filter((log) => log.eventType === "risk_continued").length;
+  const reasonCounts = new Map<RiskTriggerReason, number>();
+
+  triggeredLogs.forEach((log) => {
+    log.triggerReasons.forEach((reason) => {
+      reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
+    });
+  });
+
+  return {
+    interventionCount,
+    pauseCount,
+    continueCount,
+    pauseRate: interventionCount ? pauseCount / interventionCount : 0,
+    continueRate: interventionCount ? continueCount / interventionCount : 0,
+    topTriggerReasons: Array.from(reasonCounts.entries())
+      .map(([reason, count]) => ({ reason, count }))
+      .sort((left, right) => right.count - left.count || left.reason.localeCompare(right.reason))
+      .slice(0, 4),
+  };
+}
+
 function createPolicyContextSnapshot(
   documents: PolicyDocument[],
   source: PolicyDataSource,
-  latestTriggeredReview: RiskLogEntry | null,
+  logs: RiskLogEntry[],
 ): PolicyContextSnapshot {
+  const latestTriggeredReview = findLatestTriggeredReview(logs);
+
   return {
     source,
     documents: documents.map((document) => ({
@@ -494,8 +674,12 @@ function createPolicyContextSnapshot(
           ruleHits: latestTriggeredReview.ruleHits ?? [],
           policySummary: latestTriggeredReview.policySummary ?? "",
           citations: latestTriggeredReview.citations ?? [],
+          triggerReasons: latestTriggeredReview.triggerReasons,
+          triggerFlags: latestTriggeredReview.triggerFlags,
+          recipientAssurance: latestTriggeredReview.recipientAssurance,
         }
       : null,
+    interventionMetrics: createInterventionMetrics(logs),
   };
 }
 
@@ -693,13 +877,23 @@ export async function resetDemoState(options?: { db?: Firestore | null }): Promi
 }
 
 export async function recordRiskLog(
-  input: Omit<RiskLogEntry, "id" | "createdAt">,
+  input: RiskLogInput,
   options?: { db?: Firestore | null },
 ) {
+  const eventType = normalizeRiskLogEventType(input.eventType) ?? "risk_triggered";
+  const triggerFlags = input.triggerFlags ?? getTriggerFlagsFromRuleCodes(input.ruleCodes);
+  const triggerReasons = input.triggerReasons ?? getTriggerReasonsFromFlags(triggerFlags);
   const riskLog: RiskLogEntry = {
     id: randomUUID(),
     createdAt: new Date().toISOString(),
     ...input,
+    eventType,
+    triggerReasons,
+    triggerFlags,
+    first_time_payee: triggerFlags.first_time_payee,
+    high_amount: triggerFlags.high_amount,
+    thin_buffer: triggerFlags.thin_buffer,
+    suspicious_destination: triggerFlags.suspicious_destination,
   };
 
   memoryState.logs.unshift(riskLog);
@@ -851,7 +1045,7 @@ export async function getPolicyContextSnapshot(options?: {
   const { documents, source } = await loadPolicyDocuments({ db });
 
   if (!db) {
-    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(memoryState.logs));
+    return createPolicyContextSnapshot(documents, source, memoryState.logs);
   }
 
   try {
@@ -860,10 +1054,10 @@ export async function getPolicyContextSnapshot(options?: {
       .map((document) => normalizeRiskLog(document.id, document.data()))
       .filter((log): log is RiskLogEntry => log !== null);
 
-    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(logs));
+    return createPolicyContextSnapshot(documents, source, logs);
   } catch {
     setRuntimeDataMode("memory");
-    return createPolicyContextSnapshot(documents, source, findLatestTriggeredReview(memoryState.logs));
+    return createPolicyContextSnapshot(documents, source, memoryState.logs);
   }
 }
 

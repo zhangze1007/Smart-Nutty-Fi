@@ -19,8 +19,49 @@ const app = express();
 const port = Number(process.env.PORT ?? 8080);
 const clientDistPath = path.resolve(process.cwd(), "dist/client");
 const clientIndexPath = path.join(clientDistPath, "index.html");
+const validTriggerReasons = [
+  "first_time_payee",
+  "high_amount",
+  "thin_buffer",
+  "suspicious_destination",
+] as const;
 
 app.use(express.json());
+
+function parseTriggerFlags(value: unknown) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.first_time_payee !== "boolean" ||
+    typeof record.high_amount !== "boolean" ||
+    typeof record.thin_buffer !== "boolean" ||
+    typeof record.suspicious_destination !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  return {
+    first_time_payee: record.first_time_payee,
+    high_amount: record.high_amount,
+    thin_buffer: record.thin_buffer,
+    suspicious_destination: record.suspicious_destination,
+  };
+}
+
+function parseTriggerReasons(value: unknown) {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const reasons = value.filter((reason): reason is (typeof validTriggerReasons)[number] =>
+    validTriggerReasons.includes(reason as (typeof validTriggerReasons)[number]),
+  );
+
+  return reasons.length ? reasons : undefined;
+}
 
 app.get("/api/health", async (_request, response) => {
   await Promise.all([loadRiskConfig(), getAccountSnapshot(), loadPolicyDocuments()]);
@@ -108,6 +149,8 @@ app.post("/api/actions/confirm-transfer", async (request, response) => {
     typeof request.body?.riskProfile === "string" ? request.body.riskProfile.trim() : undefined;
   const riskLogId =
     typeof request.body?.riskLogId === "string" ? request.body.riskLogId.trim() : undefined;
+  const triggerFlags = parseTriggerFlags(request.body?.triggerFlags);
+  const triggerReasons = parseTriggerReasons(request.body?.triggerReasons);
   const ruleCodes = Array.isArray(request.body?.ruleCodes)
     ? request.body.ruleCodes.filter((value: unknown): value is string => typeof value === "string")
     : [];
@@ -132,6 +175,8 @@ app.post("/api/actions/confirm-transfer", async (request, response) => {
       riskProfile,
       riskLogId,
       ruleCodes,
+      triggerFlags,
+      triggerReasons,
     });
 
     response.status(result.status === "error" ? 400 : 200).json(result);
@@ -155,6 +200,8 @@ app.post("/api/actions/cancel-transfer", async (request, response) => {
     typeof request.body?.riskProfile === "string" ? request.body.riskProfile.trim() : undefined;
   const riskLogId =
     typeof request.body?.riskLogId === "string" ? request.body.riskLogId.trim() : undefined;
+  const triggerFlags = parseTriggerFlags(request.body?.triggerFlags);
+  const triggerReasons = parseTriggerReasons(request.body?.triggerReasons);
   const ruleCodes = Array.isArray(request.body?.ruleCodes)
     ? request.body.ruleCodes.filter((value: unknown): value is string => typeof value === "string")
     : [];
@@ -178,6 +225,8 @@ app.post("/api/actions/cancel-transfer", async (request, response) => {
       riskProfile,
       riskLogId,
       ruleCodes,
+      triggerFlags,
+      triggerReasons,
     });
 
     response.json(result);

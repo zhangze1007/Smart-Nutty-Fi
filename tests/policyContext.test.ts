@@ -43,4 +43,73 @@ describe("policy context snapshot", () => {
     expect(snapshot.latestTriggeredReview?.ruleHits[0]?.code).toBe("amount_threshold");
     expect(snapshot.latestTriggeredReview?.citations[0]?.url).toMatch(/^https?:\/\//);
   });
+
+  it("summarizes behavioural outcome metrics and accepts legacy resolution events", async () => {
+    await resetDemoState({ db: null });
+
+    const firstTriggeredLog = await recordRiskLog(
+      {
+        eventType: "risk_triggered",
+        recipient: "New Seller",
+        amount: 1200,
+        ruleCodes: ["amount_threshold", "unknown_payee"],
+        riskProfile: "balanced",
+        message: "Paused for review.",
+      },
+      { db: null },
+    );
+
+    await recordRiskLog(
+      {
+        eventType: "risk_cancelled",
+        recipient: "New Seller",
+        amount: 1200,
+        ruleCodes: ["amount_threshold", "unknown_payee"],
+        riskProfile: "balanced",
+        relatedRiskLogId: firstTriggeredLog.id,
+        message: "User paused the transfer.",
+      },
+      { db: null },
+    );
+
+    const secondTriggeredLog = await recordRiskLog(
+      {
+        eventType: "risk_triggered",
+        recipient: "Crypto Exchange",
+        amount: 5000,
+        ruleCodes: ["high_risk_keyword"],
+        riskProfile: "balanced",
+        message: "Paused for review.",
+      },
+      { db: null },
+    );
+
+    await recordRiskLog(
+      {
+        eventType: "risk_continued",
+        recipient: "Crypto Exchange",
+        amount: 5000,
+        ruleCodes: ["high_risk_keyword"],
+        riskProfile: "balanced",
+        relatedRiskLogId: secondTriggeredLog.id,
+        message: "User continued after review.",
+      },
+      { db: null },
+    );
+
+    const snapshot = await getPolicyContextSnapshot({ db: null });
+
+    expect(snapshot.interventionMetrics.interventionCount).toBe(2);
+    expect(snapshot.interventionMetrics.pauseCount).toBe(1);
+    expect(snapshot.interventionMetrics.continueCount).toBe(1);
+    expect(snapshot.interventionMetrics.pauseRate).toBe(0.5);
+    expect(snapshot.interventionMetrics.continueRate).toBe(0.5);
+    expect(snapshot.interventionMetrics.topTriggerReasons).toEqual(
+      expect.arrayContaining([
+        { reason: "high_amount", count: 1 },
+        { reason: "suspicious_destination", count: 1 },
+        { reason: "first_time_payee", count: 1 },
+      ]),
+    );
+  });
 });

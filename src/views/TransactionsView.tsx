@@ -12,7 +12,7 @@ import {
 
 import { createMockDashboardData, type AppTransaction } from "@/data/mockTransactions";
 import { getPolicyContextData, getTransactionsData } from "@/lib/dataProvider";
-import type { PolicyContextData } from "@/lib/types";
+import type { PolicyContextData, RiskTriggerReason } from "@/lib/types";
 
 const fallbackDashboard = createMockDashboardData();
 
@@ -45,6 +45,17 @@ const profileSummary = [
     description: "Later checkpoints unless the transfer still looks clearly unsafe.",
   },
 ];
+
+const triggerReasonLabels: Record<RiskTriggerReason, string> = {
+  first_time_payee: "Recipient not previously verified",
+  high_amount: "High-value transfer",
+  thin_buffer: "Thin cash buffer",
+  suspicious_destination: "Suspicious destination category",
+};
+
+function formatRate(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
 
 export default function TransactionsView() {
   const [transactions, setTransactions] = useState<AppTransaction[]>(fallbackDashboard.transactions);
@@ -90,6 +101,63 @@ export default function TransactionsView() {
             Nutty is not a banner warning. It runs a server-side transfer review, checks the active
             risk profile, and explains the checkpoint with Malaysia-specific public reference context before money moves.
           </p>
+        </div>
+
+        <div className="rounded-3xl border border-nutty-border bg-nutty-card p-5 shadow-sm">
+          <div className="mb-4 flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#C2410C]" />
+            <h2 className="text-sm font-bold text-nutty-text-main">Pilot outcome metrics</h2>
+          </div>
+          <div className="mb-4 grid grid-cols-3 gap-3">
+            <div className="rounded-2xl border border-nutty-border bg-nutty-bg p-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-nutty-text-muted">
+                Interventions
+              </p>
+              <p className="mt-2 text-lg font-bold text-nutty-text-main">
+                {policyContext?.interventionMetrics.interventionCount ?? 0}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-nutty-border bg-nutty-bg p-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-nutty-text-muted">
+                Pause rate
+              </p>
+              <p className="mt-2 text-lg font-bold text-[#9A3412]">
+                {formatRate(policyContext?.interventionMetrics.pauseRate ?? 0)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-nutty-border bg-nutty-bg p-3 text-center">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-nutty-text-muted">
+                Continue rate
+              </p>
+              <p className="mt-2 text-lg font-bold text-nutty-safe">
+                {formatRate(policyContext?.interventionMetrics.continueRate ?? 0)}
+              </p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-nutty-border bg-nutty-bg p-4">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-[#9A3412]">
+              Top trigger reasons
+            </p>
+            {policyContext?.interventionMetrics.topTriggerReasons.length ? (
+              <div className="flex flex-col gap-2">
+                {policyContext.interventionMetrics.topTriggerReasons.map((triggerReason) => (
+                  <div
+                    key={triggerReason.reason}
+                    className="flex items-center justify-between rounded-xl border border-nutty-border bg-white px-3 py-2"
+                  >
+                    <span className="text-xs font-medium text-nutty-text-main">
+                      {triggerReasonLabels[triggerReason.reason]}
+                    </span>
+                    <span className="text-xs font-bold text-[#9A3412]">{triggerReason.count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs leading-5 text-nutty-text-muted">
+                Trigger a Calm Mode review to populate behavioural outcome metrics.
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="rounded-3xl border border-nutty-border bg-nutty-card p-5 shadow-sm">

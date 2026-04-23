@@ -48,6 +48,22 @@ describe("assessTransferRisk", () => {
     ]);
     expect(assessment.ruleHits[0]?.policyTopics.length).toBeGreaterThan(0);
     expect(assessment.reasons).toHaveLength(4);
+    expect(assessment.triggerFlags).toEqual({
+      first_time_payee: true,
+      high_amount: true,
+      thin_buffer: true,
+      suspicious_destination: true,
+    });
+    expect(assessment.triggerReasons).toEqual(
+      expect.arrayContaining([
+        "first_time_payee",
+        "high_amount",
+        "thin_buffer",
+        "suspicious_destination",
+      ]),
+    );
+    expect(assessment.recipientAssurance.status).toBe("not_previously_verified");
+    expect(assessment.recipientAssurance.detail).not.toContain("definitely fraudulent");
   });
 
   it("makes first-time payee review stricter for conservative than flexible", async () => {
