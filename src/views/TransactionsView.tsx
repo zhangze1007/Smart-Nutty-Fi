@@ -13,9 +13,11 @@ import {
 import type { AppTransaction } from "@/data/mockTransactions";
 import {
   getCachedDashboardData,
-  getPolicyContextData,
+  getCachedPolicyContextData,
   revalidateDashboardData,
+  revalidatePolicyContextData,
   subscribeDashboardData,
+  subscribePolicyContextData,
 } from "@/lib/dataProvider";
 import type { PolicyContextData, RiskTriggerReason } from "@/lib/types";
 
@@ -64,17 +66,24 @@ export default function TransactionsView() {
   const [transactions, setTransactions] = useState<AppTransaction[]>(
     () => getCachedDashboardData().transactions,
   );
-  const [policyContext, setPolicyContext] = useState<PolicyContextData | null>(null);
+  const [policyContext, setPolicyContext] = useState<PolicyContextData | null>(
+    () => getCachedPolicyContextData(),
+  );
 
   useEffect(() => {
     let isMounted = true;
-    const unsubscribe = subscribeDashboardData((nextDashboard) => {
+    const unsubscribeDashboard = subscribeDashboardData((nextDashboard) => {
       if (isMounted) {
         setTransactions(nextDashboard.transactions);
       }
     });
+    const unsubscribePolicyContext = subscribePolicyContextData((nextPolicyContext) => {
+      if (isMounted) {
+        setPolicyContext(nextPolicyContext);
+      }
+    });
 
-    Promise.all([revalidateDashboardData(), getPolicyContextData()])
+    Promise.all([revalidateDashboardData(), revalidatePolicyContextData()])
       .then(([dashboardData, nextPolicyContext]) => {
         if (!isMounted) {
           return;
@@ -89,7 +98,8 @@ export default function TransactionsView() {
 
     return () => {
       isMounted = false;
-      unsubscribe();
+      unsubscribeDashboard();
+      unsubscribePolicyContext();
     };
   }, []);
 

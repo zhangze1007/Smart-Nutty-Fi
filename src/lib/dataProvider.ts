@@ -8,7 +8,7 @@ import {
   type SpendingPoint,
 } from "@/data/mockTransactions";
 import { getFirebaseDb } from "@/lib/firebase";
-import type { PolicyContextData } from "@/lib/types";
+import type { PolicyContextData, RiskPrompt } from "@/lib/types";
 
 function normalizeSpendingPoint(value: unknown): SpendingPoint | null {
   if (!value || typeof value !== "object") {
@@ -149,9 +149,128 @@ function createFallbackDashboard() {
   return createMockDashboardData();
 }
 
+const DASHBOARD_CACHE_STORAGE_KEY = "nutty-dashboard-cache-v1";
+const POLICY_CONTEXT_CACHE_STORAGE_KEY = "nutty-policy-context-cache-v1";
+
+function readStorageValue(key: string) {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorageValue(key: string, value: string) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Best effort cache only; runtime state remains the source of truth.
+  }
+}
+
+function normalizeCachedDemoState(value: unknown, fallback: DashboardData): DemoStateInfo | undefined {
+  if (!value || typeof value !== "object") {
+    return fallback.demoState;
+  }
+
+  const record = value as Record<string, unknown>;
+  const explanation = record.explanation;
+  const lastResetAt = record.lastResetAt;
+  if (
+    typeof record.baselineBalance !== "number" ||
+    typeof record.seedVersion !== "string" ||
+    typeof record.hasPersistentData !== "boolean" ||
+    (explanation !== null && typeof explanation !== "string") ||
+    (lastResetAt !== null && typeof lastResetAt !== "string")
+  ) {
+    return fallback.demoState;
+  }
+
+  return {
+    baselineBalance: record.baselineBalance,
+    seedVersion: record.seedVersion,
+    hasPersistentData: record.hasPersistentData,
+    explanation: typeof explanation === "string" ? explanation : null,
+    lastResetAt: typeof lastResetAt === "string" ? lastResetAt : null,
+  };
+}
+
+function normalizeCachedDashboard(value: unknown): DashboardData | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const fallback = createFallbackDashboard();
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.currentBalance !== "number" ||
+    typeof record.upcomingBills !== "number" ||
+    typeof record.periodLabel !== "string" ||
+    typeof record.totalWeeklySpend !== "number" ||
+    !Array.isArray(record.knownPayees) ||
+    !record.knownPayees.every((payee) => typeof payee === "string") ||
+    !Array.isArray(record.weeklySpending) ||
+    !Array.isArray(record.transactions)
+  ) {
+    return null;
+  }
+
+  const weeklySpending = record.weeklySpending
+    .map((point) => normalizeSpendingPoint(point))
+    .filter((point): point is SpendingPoint => point !== null);
+  const transactions = record.transactions
+    .map((transaction) => {
+      if (!transaction || typeof transaction !== "object") {
+        return null;
+      }
+
+      const transactionRecord = transaction as Record<string, unknown>;
+      return typeof transactionRecord.id === "string"
+        ? normalizeTransaction(transactionRecord.id, transactionRecord)
+        : null;
+    })
+    .filter((transaction): transaction is AppTransaction => transaction !== null);
+
+  if (!weeklySpending.length || !transactions.length) {
+    return null;
+  }
+
+  return {
+    currentBalance: record.currentBalance,
+    upcomingBills: record.upcomingBills,
+    knownPayees: [...record.knownPayees],
+    periodLabel: record.periodLabel,
+    weeklySpending,
+    totalWeeklySpend: record.totalWeeklySpend,
+    transactions,
+    demoState: normalizeCachedDemoState(record.demoState, fallback),
+  };
+}
+
+function readCachedDashboardFromStorage() {
+  const storedValue = readStorageValue(DASHBOARD_CACHE_STORAGE_KEY);
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    return normalizeCachedDashboard(JSON.parse(storedValue));
+  } catch {
+    return null;
+  }
+}
+
 type DashboardListener = (dashboard: DashboardData) => void;
 
-let dashboardCache = createFallbackDashboard();
+let dashboardCache = readCachedDashboardFromStorage() ?? createFallbackDashboard();
 let dashboardLocalMutationVersion = 0;
 let dashboardRefreshRequest: null | {
   promise: Promise<DashboardData>;
@@ -174,6 +293,8 @@ function cloneDashboardData(dashboard: DashboardData): DashboardData {
 
 function publishDashboardData(nextDashboard: DashboardData) {
   dashboardCache = cloneDashboardData(nextDashboard);
+  writeStorageValue(DASHBOARD_CACHE_STORAGE_KEY, JSON.stringify(dashboardCache));
+
   const publishedDashboard = getCachedDashboardData();
 
   dashboardListeners.forEach((listener) => {
@@ -224,6 +345,184 @@ export function applyConfirmedTransferToDashboard(input: {
       explanation: previousDemoState?.explanation ?? createDemoStateExplanation(baselineBalance),
       lastResetAt: previousDemoState?.lastResetAt ?? null,
     },
+  });
+}
+
+type PolicyContextListener = (policyContext: PolicyContextData | null) => void;
+
+function clonePolicyContextData(policyContext: PolicyContextData): PolicyContextData {
+  return {
+    source: policyContext.source,
+    documents: policyContext.documents.map((document) => ({
+      ...document,
+      topics: [...document.topics],
+    })),
+    latestTriggeredReview: policyContext.latestTriggeredReview
+      ? {
+          ...policyContext.latestTriggeredReview,
+          ruleHits: policyContext.latestTriggeredReview.ruleHits.map((ruleHit) => ({
+            ...ruleHit,
+            policyTopics: [...ruleHit.policyTopics],
+          })),
+          citations: policyContext.latestTriggeredReview.citations.map((citation) => ({
+            ...citation,
+          })),
+          triggerReasons: [...policyContext.latestTriggeredReview.triggerReasons],
+          triggerFlags: { ...policyContext.latestTriggeredReview.triggerFlags },
+          recipientAssurance: policyContext.latestTriggeredReview.recipientAssurance
+            ? { ...policyContext.latestTriggeredReview.recipientAssurance }
+            : undefined,
+        }
+      : null,
+    interventionMetrics: {
+      ...policyContext.interventionMetrics,
+      topTriggerReasons: policyContext.interventionMetrics.topTriggerReasons.map((reason) => ({
+        ...reason,
+      })),
+    },
+  };
+}
+
+function normalizeCachedPolicyContext(value: unknown): PolicyContextData | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as PolicyContextData;
+  if (
+    (record.source !== "firestore" && record.source !== "seed") ||
+    !Array.isArray(record.documents) ||
+    !record.interventionMetrics
+  ) {
+    return null;
+  }
+
+  return clonePolicyContextData(record);
+}
+
+function readCachedPolicyContextFromStorage() {
+  const storedValue = readStorageValue(POLICY_CONTEXT_CACHE_STORAGE_KEY);
+  if (!storedValue) {
+    return null;
+  }
+
+  try {
+    return normalizeCachedPolicyContext(JSON.parse(storedValue));
+  } catch {
+    return null;
+  }
+}
+
+function createEmptyPolicyContextData(): PolicyContextData {
+  return {
+    source: "seed",
+    documents: [],
+    latestTriggeredReview: null,
+    interventionMetrics: {
+      interventionCount: 0,
+      pauseCount: 0,
+      continueCount: 0,
+      pauseRate: 0,
+      continueRate: 0,
+      topTriggerReasons: [],
+    },
+  };
+}
+
+let policyContextCache = readCachedPolicyContextFromStorage();
+let policyContextLocalMutationVersion = 0;
+let policyContextRefreshRequest: null | {
+  promise: Promise<PolicyContextData>;
+} = null;
+
+const policyContextListeners = new Set<PolicyContextListener>();
+
+function publishPolicyContextData(nextPolicyContext: PolicyContextData) {
+  policyContextCache = clonePolicyContextData(nextPolicyContext);
+  writeStorageValue(POLICY_CONTEXT_CACHE_STORAGE_KEY, JSON.stringify(policyContextCache));
+
+  const publishedPolicyContext = getCachedPolicyContextData();
+
+  policyContextListeners.forEach((listener) => {
+    listener(publishedPolicyContext ? clonePolicyContextData(publishedPolicyContext) : null);
+  });
+}
+
+function publishLocalPolicyContextData(nextPolicyContext: PolicyContextData) {
+  policyContextLocalMutationVersion += 1;
+  publishPolicyContextData(nextPolicyContext);
+}
+
+function recalculateInterventionRates(metrics: PolicyContextData["interventionMetrics"]) {
+  const interventionCount = metrics.interventionCount || 0;
+
+  return {
+    ...metrics,
+    pauseRate: interventionCount ? metrics.pauseCount / interventionCount : 0,
+    continueRate: interventionCount ? metrics.continueCount / interventionCount : 0,
+  };
+}
+
+function incrementTopTriggerReasons(
+  topTriggerReasons: PolicyContextData["interventionMetrics"]["topTriggerReasons"],
+  triggerReasons: RiskPrompt["triggerReasons"],
+) {
+  const counts = new Map(topTriggerReasons.map((reason) => [reason.reason, reason.count]));
+
+  triggerReasons.forEach((reason) => {
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((left, right) => right.count - left.count);
+}
+
+export function getCachedPolicyContextData() {
+  return policyContextCache ? clonePolicyContextData(policyContextCache) : null;
+}
+
+export function subscribePolicyContextData(listener: PolicyContextListener) {
+  policyContextListeners.add(listener);
+
+  return () => {
+    policyContextListeners.delete(listener);
+  };
+}
+
+export function applyTriggeredReviewToPolicyContext(riskPrompt: RiskPrompt) {
+  const previousPolicyContext = policyContextCache ?? createEmptyPolicyContextData();
+  const reviewId = riskPrompt.riskLogId ?? `${riskPrompt.recipient}-${riskPrompt.amount}`;
+  const isSameReview = previousPolicyContext.latestTriggeredReview?.id === reviewId;
+  const previousMetrics = previousPolicyContext.interventionMetrics;
+
+  const nextMetrics = isSameReview
+    ? previousMetrics
+    : recalculateInterventionRates({
+        ...previousMetrics,
+        interventionCount: previousMetrics.interventionCount + 1,
+        topTriggerReasons: incrementTopTriggerReasons(
+          previousMetrics.topTriggerReasons,
+          riskPrompt.triggerReasons,
+        ),
+      });
+
+  publishLocalPolicyContextData({
+    ...previousPolicyContext,
+    latestTriggeredReview: {
+      id: reviewId,
+      recipient: riskPrompt.recipient,
+      amount: riskPrompt.amount,
+      riskProfile: riskPrompt.appliedProfile,
+      createdAt: new Date().toISOString(),
+      ruleHits: riskPrompt.ruleHits,
+      policySummary: riskPrompt.policySummary,
+      citations: riskPrompt.citations,
+      triggerReasons: riskPrompt.triggerReasons,
+      triggerFlags: riskPrompt.triggerFlags,
+      recipientAssurance: riskPrompt.recipientAssurance,
+    },
+    interventionMetrics: nextMetrics,
   });
 }
 
@@ -361,6 +660,33 @@ export async function getTransactionsData() {
   };
 }
 
+export function revalidatePolicyContextData(options?: { force?: boolean }): Promise<PolicyContextData> {
+  if (policyContextRefreshRequest && !options?.force) {
+    return policyContextRefreshRequest.promise;
+  }
+
+  const refreshMutationVersion = policyContextLocalMutationVersion;
+  const refreshRequest = {
+    promise: fetchRuntimePolicyContext()
+      .then((nextPolicyContext) => {
+        if (refreshMutationVersion === policyContextLocalMutationVersion) {
+          publishPolicyContextData(nextPolicyContext);
+        }
+
+        return getCachedPolicyContextData() ?? nextPolicyContext;
+      })
+      .finally(() => {
+        if (policyContextRefreshRequest === refreshRequest) {
+          policyContextRefreshRequest = null;
+        }
+      }),
+  };
+
+  policyContextRefreshRequest = refreshRequest;
+
+  return refreshRequest.promise;
+}
+
 export async function getPolicyContextData() {
-  return fetchRuntimePolicyContext();
+  return revalidatePolicyContextData();
 }

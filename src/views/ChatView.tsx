@@ -93,11 +93,13 @@ export default function ChatView({
   transferEvent,
   onTransferEventConsumed,
   riskProfile,
+  onTransferCompleted,
 }: {
   onRiskTrigger: (riskPrompt: RiskPrompt) => void;
   transferEvent: TransferResolutionEvent | null;
   onTransferEventConsumed: () => void;
   riskProfile: RiskProfileId;
+  onTransferCompleted: (response: AssistantResponse) => void;
 }) {
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -129,6 +131,7 @@ export default function ChatView({
 
   const handleAssistantResponse = (response: AssistantResponse) => {
     setMessages((previousMessages) => [...previousMessages, createAssistantMessage(response)]);
+    onTransferCompleted(response);
 
     if (response.status === "requires_confirmation" && response.calmMode && response.confirmation) {
       onRiskTrigger({
@@ -320,11 +323,11 @@ export default function ChatView({
           />
           <Button
             size="icon"
-            className="h-10 w-10 shrink-0 rounded-full"
+            className="h-10 w-10 shrink-0 rounded-full p-0"
             onClick={handleSend}
             disabled={!input.trim() || isSending}
           >
-            <Send className="ml-0.5 h-4 w-4" />
+            <Send className="h-4 w-4" />
           </Button>
         </div>
         <div className="scrollbar-hide mt-3 flex gap-2 overflow-x-auto px-1 pb-1">

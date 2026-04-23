@@ -10,7 +10,12 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { applyConfirmedTransferToDashboard, revalidateDashboardData } from "@/lib/dataProvider";
+import {
+  applyConfirmedTransferToDashboard,
+  applyTriggeredReviewToPolicyContext,
+  revalidateDashboardData,
+  revalidatePolicyContextData,
+} from "@/lib/dataProvider";
 import type {
   AssistantResponse,
   RiskProfileId,
@@ -132,8 +137,30 @@ export default function App() {
     };
   }, [isRiskModalOpen]);
 
+  const revalidateRuntimeState = () => {
+    void revalidateDashboardData({ force: true }).catch(() => {
+      // The confirmed local state stays visible; a later view load can retry sync.
+    });
+    void revalidatePolicyContextData({ force: true }).catch(() => {
+      // Policy context is cached for responsiveness and reconciled when runtime is reachable.
+    });
+  };
+
+  const applyCompletedTransferResponse = (assistantResponse: AssistantResponse) => {
+    if (assistantResponse.status !== "completed" || !assistantResponse.transferResult) {
+      return;
+    }
+
+    applyConfirmedTransferToDashboard(assistantResponse.transferResult);
+    revalidateRuntimeState();
+  };
+
   const triggerRiskIntervention = (nextRiskData: RiskPrompt) => {
     setRiskData(nextRiskData);
+    applyTriggeredReviewToPolicyContext(nextRiskData);
+    void revalidatePolicyContextData({ force: true }).catch(() => {
+      // Keep the just-opened Calm Mode evidence visible and retry on the next policy view.
+    });
     setIsVerificationGuidanceVisible(false);
     setIsRiskModalOpen(true);
   };
@@ -175,15 +202,8 @@ export default function App() {
       });
 
       const assistantResponse = (await transferResponse.json()) as AssistantResponse;
-      if (
-        transferResponse.ok &&
-        assistantResponse.status === "completed" &&
-        assistantResponse.transferResult
-      ) {
-        applyConfirmedTransferToDashboard(assistantResponse.transferResult);
-        void revalidateDashboardData({ force: true }).catch(() => {
-          // The confirmed transfer is already reflected locally; a later view load can retry sync.
-        });
+      if (transferResponse.ok) {
+        applyCompletedTransferResponse(assistantResponse);
       }
       pushTransferEvent(assistantResponse);
     } catch {
@@ -229,6 +249,11 @@ export default function App() {
       });
 
       const assistantResponse = (await cancelResponse.json()) as AssistantResponse;
+      if (cancelResponse.ok) {
+        void revalidatePolicyContextData({ force: true }).catch(() => {
+          // The pause message is already in chat; policy metrics can retry on next policy view.
+        });
+      }
       pushTransferEvent(assistantResponse);
     } catch {
       pushTransferEvent({
@@ -267,6 +292,7 @@ export default function App() {
               transferEvent={transferEvent}
               onTransferEventConsumed={clearTransferEvent}
               riskProfile={riskProfile}
+              onTransferCompleted={applyCompletedTransferResponse}
             />
           )}
           {currentView === "transactions" && <TransactionsView />}
