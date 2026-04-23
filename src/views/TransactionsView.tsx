@@ -10,11 +10,14 @@ import {
   Zap,
 } from "lucide-react";
 
-import { createMockDashboardData, type AppTransaction } from "@/data/mockTransactions";
-import { getPolicyContextData, getTransactionsData } from "@/lib/dataProvider";
+import type { AppTransaction } from "@/data/mockTransactions";
+import {
+  getCachedDashboardData,
+  getPolicyContextData,
+  revalidateDashboardData,
+  subscribeDashboardData,
+} from "@/lib/dataProvider";
 import type { PolicyContextData, RiskTriggerReason } from "@/lib/types";
-
-const fallbackDashboard = createMockDashboardData();
 
 const iconMap = {
   coffee: <Coffee className="h-4 w-4" />,
@@ -58,19 +61,26 @@ function formatRate(value: number) {
 }
 
 export default function TransactionsView() {
-  const [transactions, setTransactions] = useState<AppTransaction[]>(fallbackDashboard.transactions);
+  const [transactions, setTransactions] = useState<AppTransaction[]>(
+    () => getCachedDashboardData().transactions,
+  );
   const [policyContext, setPolicyContext] = useState<PolicyContextData | null>(null);
 
   useEffect(() => {
     let isMounted = true;
+    const unsubscribe = subscribeDashboardData((nextDashboard) => {
+      if (isMounted) {
+        setTransactions(nextDashboard.transactions);
+      }
+    });
 
-    Promise.all([getTransactionsData(), getPolicyContextData()])
-      .then(([transactionData, nextPolicyContext]) => {
+    Promise.all([revalidateDashboardData(), getPolicyContextData()])
+      .then(([dashboardData, nextPolicyContext]) => {
         if (!isMounted) {
           return;
         }
 
-        setTransactions(transactionData.transactions);
+        setTransactions(dashboardData.transactions);
         setPolicyContext(nextPolicyContext);
       })
       .catch(() => {
@@ -79,6 +89,7 @@ export default function TransactionsView() {
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, []);
 

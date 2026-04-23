@@ -13,8 +13,13 @@ import {
 
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { createMockDashboardData, mockDashboardData } from "@/data/mockTransactions";
-import { getDashboardData, resetDemoData } from "@/lib/dataProvider";
+import { mockDashboardData } from "@/data/mockTransactions";
+import {
+  getCachedDashboardData,
+  resetDemoData,
+  revalidateDashboardData,
+  subscribeDashboardData,
+} from "@/lib/dataProvider";
 import { markJudgeModeInitialized, readJudgeModeInitialized, shouldAutoResetDemo } from "@/lib/judgeMode";
 import type { RiskProfileId, TextScale } from "@/lib/types";
 
@@ -57,7 +62,7 @@ export default function HomeView({
   onTextScaleChange: (textScale: TextScale) => void;
 }) {
   const [simulatorAmount, setSimulatorAmount] = useState("");
-  const [dashboard, setDashboard] = useState(createMockDashboardData());
+  const [dashboard, setDashboard] = useState(() => getCachedDashboardData());
   const [isResettingDemo, setIsResettingDemo] = useState(false);
   const [demoResetFeedback, setDemoResetFeedback] = useState<null | {
     tone: "success" | "error";
@@ -67,8 +72,13 @@ export default function HomeView({
 
   useEffect(() => {
     let isMounted = true;
+    const unsubscribe = subscribeDashboardData((nextDashboard) => {
+      if (isMounted) {
+        setDashboard(nextDashboard);
+      }
+    });
 
-    getDashboardData()
+    revalidateDashboardData()
       .then(async (nextDashboard) => {
         if (!isMounted) {
           return;
@@ -118,6 +128,7 @@ export default function HomeView({
 
     return () => {
       isMounted = false;
+      unsubscribe();
     };
   }, []);
 

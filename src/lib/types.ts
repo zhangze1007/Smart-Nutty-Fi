@@ -1,3 +1,5 @@
+import type { AppTransaction } from "@/data/mockTransactions";
+
 export type AssistantIntent = "transfer_money" | "pay_bill" | "calculate_cashflow" | "unknown";
 export type AssistantStatus = "requires_confirmation" | "completed" | "info" | "error";
 export type RiskProfileId = "conservative" | "balanced" | "flexible";
@@ -63,6 +65,10 @@ export type AssistantResponse = {
   confirmation: null | {
     recipient: string;
     amount: number;
+  };
+  transferResult?: null | {
+    currentBalance: number;
+    transaction: AppTransaction;
   };
 };
 

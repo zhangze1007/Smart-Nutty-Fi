@@ -72,6 +72,25 @@ const RecipientAssuranceSchema = z.object({
   guidance: z.string(),
 });
 
+const AppTransactionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: z.string(),
+  amount: z.number(),
+  date: z.string(),
+  createdAt: z.string(),
+  iconKey: z.enum(["coffee", "bill", "income", "shopping", "transfer"]),
+  colorKey: z.enum(["warning", "primary", "safe", "secondary"]),
+  isIncome: z.boolean().optional(),
+  recipient: z.string().optional(),
+  status: z.enum(["completed", "reviewed"]).optional(),
+});
+
+const TransferResultSchema = z.object({
+  currentBalance: z.number(),
+  transaction: AppTransactionSchema,
+});
+
 const AssistantResponseSchema = z.object({
   reply: z.string(),
   intent: z.enum(["transfer_money", "pay_bill", "calculate_cashflow", "unknown"]),
@@ -104,6 +123,7 @@ const AssistantResponseSchema = z.object({
       amount: z.number(),
     })
     .nullable(),
+  transferResult: TransferResultSchema.nullable().optional(),
 });
 
 const ParsedIntentSchema = z.object({
@@ -239,6 +259,7 @@ const transferMoneyTool = ai.defineTool(
       blocked: z.boolean(),
       message: z.string(),
       transactionId: z.string().nullable(),
+      transaction: AppTransactionSchema.nullable(),
       currentBalance: z.number(),
       reasons: z.array(z.string()),
       appliedProfile: RiskProfileSchema,
@@ -264,6 +285,7 @@ const transferMoneyTool = ai.defineTool(
         blocked: true,
         message: "This transfer is blocked until the user confirms Calm Mode.",
         transactionId: null,
+        transaction: null,
         currentBalance: accountSnapshot.currentBalance,
         reasons: risk.reasons,
         appliedProfile: risk.appliedProfile,
@@ -282,6 +304,7 @@ const transferMoneyTool = ai.defineTool(
       blocked: false,
       message: `Transfer complete. RM${amount.toFixed(2)} sent to ${recipient}.`,
       transactionId: transaction.id,
+      transaction,
       currentBalance,
       reasons: risk.reasons,
       appliedProfile: risk.appliedProfile,
@@ -767,6 +790,12 @@ export const assistantFlow = ai.defineFlow(
         },
         calmMode: null,
         confirmation: null,
+        transferResult: transferResult.result.transaction
+          ? {
+              currentBalance: transferResult.result.currentBalance,
+              transaction: transferResult.result.transaction,
+            }
+          : null,
       };
     }
 
@@ -875,6 +904,12 @@ export async function confirmTransfer(input: {
     },
     calmMode: null,
     confirmation: null,
+    transferResult: transferResult.result.transaction
+      ? {
+          currentBalance: transferResult.result.currentBalance,
+          transaction: transferResult.result.transaction,
+        }
+      : null,
   };
 }
 

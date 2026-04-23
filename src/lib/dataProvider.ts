@@ -149,6 +149,84 @@ function createFallbackDashboard() {
   return createMockDashboardData();
 }
 
+type DashboardListener = (dashboard: DashboardData) => void;
+
+let dashboardCache = createFallbackDashboard();
+let dashboardLocalMutationVersion = 0;
+let dashboardRefreshRequest: null | {
+  promise: Promise<DashboardData>;
+} = null;
+
+const dashboardListeners = new Set<DashboardListener>();
+
+function cloneDashboardData(dashboard: DashboardData): DashboardData {
+  return {
+    currentBalance: dashboard.currentBalance,
+    upcomingBills: dashboard.upcomingBills,
+    knownPayees: [...dashboard.knownPayees],
+    periodLabel: dashboard.periodLabel,
+    weeklySpending: dashboard.weeklySpending.map((point) => ({ ...point })),
+    totalWeeklySpend: dashboard.totalWeeklySpend,
+    transactions: dashboard.transactions.map((transaction) => ({ ...transaction })),
+    demoState: dashboard.demoState ? { ...dashboard.demoState } : undefined,
+  };
+}
+
+function publishDashboardData(nextDashboard: DashboardData) {
+  dashboardCache = cloneDashboardData(nextDashboard);
+  const publishedDashboard = getCachedDashboardData();
+
+  dashboardListeners.forEach((listener) => {
+    listener(cloneDashboardData(publishedDashboard));
+  });
+}
+
+function publishLocalDashboardData(nextDashboard: DashboardData) {
+  dashboardLocalMutationVersion += 1;
+  publishDashboardData(nextDashboard);
+}
+
+export function getCachedDashboardData() {
+  return cloneDashboardData(dashboardCache);
+}
+
+export function subscribeDashboardData(listener: DashboardListener) {
+  dashboardListeners.add(listener);
+
+  return () => {
+    dashboardListeners.delete(listener);
+  };
+}
+
+export function applyConfirmedTransferToDashboard(input: {
+  currentBalance: number;
+  transaction: AppTransaction;
+}) {
+  const fallback = createFallbackDashboard();
+  const previousDemoState = dashboardCache.demoState ?? fallback.demoState;
+  const baselineBalance = previousDemoState?.baselineBalance ?? fallback.currentBalance;
+  const existingTransactions = dashboardCache.transactions.filter(
+    (transaction) => transaction.id !== input.transaction.id,
+  );
+  const knownPayees = input.transaction.recipient
+    ? Array.from(new Set([...dashboardCache.knownPayees, input.transaction.recipient]))
+    : dashboardCache.knownPayees;
+
+  publishLocalDashboardData({
+    ...dashboardCache,
+    currentBalance: input.currentBalance,
+    knownPayees,
+    transactions: [{ ...input.transaction }, ...existingTransactions].slice(0, 20),
+    demoState: {
+      baselineBalance,
+      seedVersion: previousDemoState?.seedVersion ?? fallback.demoState?.seedVersion ?? "hackathon-baseline-v1",
+      hasPersistentData: true,
+      explanation: previousDemoState?.explanation ?? createDemoStateExplanation(baselineBalance),
+      lastResetAt: previousDemoState?.lastResetAt ?? null,
+    },
+  });
+}
+
 async function fetchRuntimeDashboard() {
   const response = await fetch("/api/runtime/dashboard");
 
@@ -178,10 +256,13 @@ export async function resetDemoData() {
     throw new Error("Demo reset request failed.");
   }
 
-  return (await response.json()) as DashboardData;
+  const resetDashboard = (await response.json()) as DashboardData;
+  publishLocalDashboardData(resetDashboard);
+
+  return getCachedDashboardData();
 }
 
-export async function getDashboardData(): Promise<DashboardData> {
+async function loadDashboardData(): Promise<DashboardData> {
   const fallback = createFallbackDashboard();
   const db = getFirebaseDb();
 
@@ -236,6 +317,37 @@ export async function getDashboardData(): Promise<DashboardData> {
   } catch {
     return fallback;
   }
+}
+
+export function revalidateDashboardData(options?: { force?: boolean }): Promise<DashboardData> {
+  if (dashboardRefreshRequest && !options?.force) {
+    return dashboardRefreshRequest.promise;
+  }
+
+  const refreshMutationVersion = dashboardLocalMutationVersion;
+  const refreshRequest = {
+    promise: loadDashboardData()
+      .then((nextDashboard) => {
+        if (refreshMutationVersion === dashboardLocalMutationVersion) {
+          publishDashboardData(nextDashboard);
+        }
+
+        return getCachedDashboardData();
+      })
+      .finally(() => {
+        if (dashboardRefreshRequest === refreshRequest) {
+          dashboardRefreshRequest = null;
+        }
+      }),
+  };
+
+  dashboardRefreshRequest = refreshRequest;
+
+  return refreshRequest.promise;
+}
+
+export async function getDashboardData(): Promise<DashboardData> {
+  return revalidateDashboardData();
 }
 
 export async function getTransactionsData() {

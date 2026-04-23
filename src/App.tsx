@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { applyConfirmedTransferToDashboard, revalidateDashboardData } from "@/lib/dataProvider";
 import type {
   AssistantResponse,
   RiskProfileId,
@@ -174,6 +175,16 @@ export default function App() {
       });
 
       const assistantResponse = (await transferResponse.json()) as AssistantResponse;
+      if (
+        transferResponse.ok &&
+        assistantResponse.status === "completed" &&
+        assistantResponse.transferResult
+      ) {
+        applyConfirmedTransferToDashboard(assistantResponse.transferResult);
+        void revalidateDashboardData({ force: true }).catch(() => {
+          // The confirmed transfer is already reflected locally; a later view load can retry sync.
+        });
+      }
       pushTransferEvent(assistantResponse);
     } catch {
       pushTransferEvent({
