@@ -28,6 +28,58 @@ const validTriggerReasons = [
 
 app.use(express.json());
 
+function setNoStore(response: express.Response) {
+  response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+}
+
+function sendStaleAssetRecovery(request: express.Request, response: express.Response) {
+  setNoStore(response);
+
+  if (request.path.endsWith(".js") || request.path.endsWith(".mjs")) {
+    response
+      .status(200)
+      .type("application/javascript")
+      .send(`(function () {
+  var recoveryKey = "nutty-fi-stale-asset-recovery";
+
+  function showRecoveryMessage() {
+    var markup = '<main style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#f7f7f2;padding:24px;font-family:Arial,sans-serif;color:#2d2d2a;"><section style="max-width:420px;border:1px solid #e8e8e1;border-radius:20px;background:#fff;padding:24px;"><h1 style="margin:0 0 8px;font-size:24px;">Nutty-Fi needs a refresh</h1><p style="margin:0 0 16px;line-height:1.5;color:#4b5563;">This browser has an old app bundle from before the latest deploy. Reload once to fetch the current app.</p><button type="button" onclick="window.location.reload()" style="height:44px;border:0;border-radius:12px;background:#4a4a32;color:#fff;padding:0 16px;font-weight:700;">Reload Nutty-Fi</button></section></main>';
+
+    if (document.body) {
+      document.body.innerHTML = markup;
+      return;
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+      document.body.innerHTML = markup;
+    });
+  }
+
+  try {
+    if (window.sessionStorage.getItem(recoveryKey) === "done") {
+      showRecoveryMessage();
+      return;
+    }
+
+    window.sessionStorage.setItem(recoveryKey, "done");
+  } catch (error) {
+    // Storage is optional; use a best-effort cache-busted reload.
+  }
+
+  var separator = window.location.href.indexOf("?") === -1 ? "?" : "&";
+  window.location.replace(window.location.href + separator + "nutty_refresh=" + Date.now().toString());
+})();`);
+    return;
+  }
+
+  if (request.path.endsWith(".css")) {
+    response.status(200).type("text/css").send("/* stale Nutty-Fi stylesheet ignored */");
+    return;
+  }
+
+  response.status(404).type("text/plain").send("Frontend asset not found. Refresh the app.");
+}
+
 function parseTriggerFlags(value: unknown) {
   if (!value || typeof value !== "object") {
     return undefined;
@@ -247,7 +299,7 @@ if (existsSync(clientDistPath)) {
     express.static(clientDistPath, {
       setHeaders: (response, filePath) => {
         if (filePath.endsWith(".html")) {
-          response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+          setNoStore(response);
           return;
         }
 
@@ -261,8 +313,15 @@ if (existsSync(clientDistPath)) {
     }),
   );
 
+  app.get("/assets/*", sendStaleAssetRecovery);
+
+  app.get("/favicon.ico", (_request, response) => {
+    setNoStore(response);
+    response.status(204).send();
+  });
+
   app.get("*", (_request, response) => {
-    response.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    setNoStore(response);
     response.sendFile(clientIndexPath);
   });
 } else {

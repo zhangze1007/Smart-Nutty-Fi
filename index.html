@@ -7,6 +7,48 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Nutty-Fi</title>
+    <script>
+      (function () {
+        var reloadKey = "nutty-fi-stale-asset-reload";
+
+        window.addEventListener(
+          "error",
+          function (event) {
+            var target = event.target;
+            var source =
+              target && (target.src || target.href) ? String(target.src || target.href) : "";
+
+            if (!source || source.indexOf("/assets/") === -1) {
+              return;
+            }
+
+            try {
+              if (window.sessionStorage.getItem(reloadKey) === "done") {
+                return;
+              }
+
+              window.sessionStorage.setItem(reloadKey, "done");
+            } catch (error) {
+              // Continue with a single best-effort reload when storage is blocked.
+            }
+
+            var separator = window.location.href.indexOf("?") === -1 ? "?" : "&";
+            window.location.replace(
+              window.location.href + separator + "nutty_refresh=" + Date.now().toString()
+            );
+          },
+          true
+        );
+
+        window.addEventListener("load", function () {
+          try {
+            window.sessionStorage.removeItem(reloadKey);
+          } catch (error) {
+            // Storage is optional; the app can still render normally.
+          }
+        });
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
